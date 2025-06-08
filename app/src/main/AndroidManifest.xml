@@ -45,7 +45,7 @@
 
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="com.elite.qel_medistore.provider"
+            android:authorities="com.elite.wallet.provider"
             android:grantUriPermissions="true"
             android:exported="false">
             <meta-data

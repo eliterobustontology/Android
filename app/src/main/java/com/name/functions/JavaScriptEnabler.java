@@ -1,4 +1,4 @@
-package com.elite.qel_medistore;
+package com.elite.wallet;
 
 import android.webkit.WebSettings;
 import android.webkit.WebView;

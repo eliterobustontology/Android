@@ -1,4 +1,4 @@
-package com.elite.qel_medistore;
+package com.elite.wallet;
 
 import android.app.AlertDialog;
 import android.content.Context;
