@@ -1,0 +1,11 @@
+{
+    "package_name": "com.elite.qel_medistore",
+    "app_name": "Qel",
+    "version_code": 1,
+    "version_name": "1",
+    "min_sdk": 21,
+    "compile_sdk": 33,
+    "color_black": "#333333",
+    "color_dark_gray": "#333333",
+    "color_white": "#333333"
+}

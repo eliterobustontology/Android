@@ -1,0 +1,136 @@
+import groovy.json.JsonSlurper
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+
+apply plugin: 'com.android.application'
+
+def jsonFile = file("${rootDir}/config.json")
+if (!jsonFile.exists()) {
+    throw new GradleException("config.json not found at ${jsonFile.absolutePath}")
+}
+
+def json = new JsonSlurper().parseText(jsonFile.text)
+def packageName = json.package_name ?: "com.nova.app"
+def appName = json.app_name ?: "Nova"
+def appCode = json.version_code ?: 1
+def appVersion = json.version_name ?: "1"
+def sdkMin = json.min_sdk ?: 21
+def sdkUpdate = json.compile_sdk ?: 33
+
+def colorBlack = json.color_black ?: "#000000"
+def colorDarkGray = json.color_dark_gray ?: "#121212"
+def colorWhite = json.color_white ?: "#FFFFFF"
+
+android {
+    compileSdkVersion sdkUpdate
+
+    defaultConfig {
+        applicationId packageName
+        minSdkVersion sdkMin
+        targetSdkVersion sdkUpdate
+        versionCode appCode
+        versionName appVersion
+        namespace packageName
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+task moveAssets {
+    doLast {
+        def rootDirPath = file("${rootDir}")
+        def drawablePath = file("src/main/res/drawable")
+        def assetsPath = file("src/main/assets") 
+
+        drawablePath.mkdirs()
+        assetsPath.mkdirs() 
+
+        def filesToMove = ["app_icon.png", "splash_screen.png"]
+
+        filesToMove.each { fileName ->
+            def sourceFile = new File(rootDirPath, fileName)
+            def destinationFile = new File(drawablePath, fileName)
+
+            if (sourceFile.exists()) {
+                Files.move(sourceFile.toPath(), destinationFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            } else {
+                println "${fileName} not found in project root, skipping..."
+            }
+        }
+
+        def logoSource = new File(rootDirPath, "index.html")
+        def logoDestination = new File(assetsPath, "index.html")
+
+        if (logoSource.exists()) {
+            Files.move(logoSource.toPath(), logoDestination.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        } else {
+            println "index.html not found in project root, skipping..."
+        }
+    }
+}
+
+task updateConfig {
+    doLast {
+        
+        fileTree(dir: 'src/main/java', include: '**/*.java').each { file ->
+            file.text = file.text.replaceAll('package\\s+[^;]+;', "package ${packageName};")
+        }
+
+        def stringsFile = file('src/main/res/values/strings.xml')
+        if (stringsFile.exists()) {
+            def stringsContent = stringsFile.text
+            stringsContent = stringsContent.replaceAll('<string name="app_name">.*?</string>', "<string name=\"app_name\">${appName}</string>")
+            stringsFile.text = stringsContent
+        } else {
+            throw new GradleException("strings.xml not found at: ${stringsFile.absolutePath}")
+        }
+
+        def colorsFile = file('src/main/res/values/colors.xml')
+        if (colorsFile.exists()) {
+            def colorsContent = colorsFile.text
+            colorsContent = colorsContent.replaceAll('<color name="black">.*?</color>', "<color name=\"black\">${colorBlack}</color>")
+            colorsContent = colorsContent.replaceAll('<color name="dark_gray">.*?</color>', "<color name=\"dark_gray\">${colorDarkGray}</color>")
+            colorsContent = colorsContent.replaceAll('<color name="white">.*?</color>', "<color name=\"white\">${colorWhite}</color>")
+            colorsFile.text = colorsContent
+        } else {
+            throw new GradleException("colors.xml not found at: ${colorsFile.absolutePath}")
+        }
+    }
+}
+
+task updateManifest {
+    doLast {
+        def manifestFile = file("src/main/AndroidManifest.xml")
+
+        if (manifestFile.exists()) {
+            def manifestContent = manifestFile.text
+
+            manifestContent = manifestContent.replaceAll(
+                'android:authorities=".*?\\.provider"',
+                "android:authorities=\"${packageName}.provider\""
+            )
+
+            manifestFile.text = manifestContent
+        } else {
+            throw new GradleException("AndroidManifest.xml not found at: ${manifestFile.absolutePath}")
+        }
+    }
+}
+
+preBuild.dependsOn updateManifest
+updateConfig.dependsOn moveAssets
+preBuild.dependsOn updateConfig
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.4.0'
+    implementation 'com.google.android.material:material:1.9.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.3'
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.3'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
+}
