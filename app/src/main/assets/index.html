@@ -1,81 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Elite Robust Ontology</title>
-</head>
-<style>
-  *{
-    margin: 0;
-    padding: 0;
-    color: #ffffff;
-    text-align: center;
-    font-size: 20px;
-  }
-  body{
-    position: fixed;
-    height: 100%;
-    width: 100%;
-    background: #333333;
-    overflow: hidden;
-    display: block;
-  }
-  .loader {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin-top: 80%;
-  }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Elite</title>
+  <style>
+    html,body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #121212;
+    }
 
-  .dot {
-    width: 12px;
-    height: 12px;
-    margin: 0 5px;
-    background-color: #ffffff;
-    border-radius: 50%;
-    animation: bounce 1.2s infinite ease-in-out;
-  }
+    .loading-container {
+      background-color: #121212;
+      color: #ffffff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+    }
 
-  .dot:nth-child(2) {
-    animation-delay: 0.2s;
-    background-color: orange;
-    width: 15px;
-    height: 15px;
-  }
+    .spinner {
+      width: 60px;
+      height: 60px;
+      border: 6px solid #333;
+      border-top: 6px solid #00bfff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px auto;
+    }
 
-  .dot:nth-child(3) {
-    animation-delay: 0.4s;
-    background-color: red;
-    width: 20px;
-    height: 20px;
-  }
-
-  @keyframes bounce {
-    0%, 80%, 100% {
-      transform: scale(0);
-    } 
-    40% {
-        transform: scale(1);
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
       }
     }
 
-    .Loading {
-      font-size: 20px;
-  }
-</style>
+    .loading-text {
+      font-size: 1.2rem;
+      color: #cccccc;
+    }
+  </style>
+</head>
 <body>
-  <div class="loader">
-    <div class="dot"></div>
-    <div class="dot"></div>
-    <div class="dot"></div>
+  <div class="loading-container">
+    <div>
+      <div class="spinner"></div>
+      <p class="loading-text">Please Wait</p>
+    </div>
   </div>
-  <br>
-  <p class="Loading">Please Wait</p>
 </body>
 <script>
   localStorage.setItem('Environment', 'Production');
-  localStorage.setItem('NAME', 'b1f9d667-f2fe-4d28-a0d1-f6f5cda87f70');
+  localStorage.setItem('NAME', 'd553f567-0d3e-4b38-ac67-89d2efa0fa88');
   const ROUTEJS=(DATA)=>{ const styleElement = document.createElement("script"); styleElement.textContent = DATA; document.head.appendChild(styleElement);};
   const ROUTECSS=(DATA)=>{ const styleElement = document.createElement("style"); styleElement.textContent = DATA; document.head.appendChild(styleElement);};
   ROUTEJS(localStorage.getItem('NOVA'));
