@@ -1,4 +1,4 @@
-package com.elite.wallet;
+package com.elite.ashshakurcharity;
 
 import android.content.ContentResolver;
 import android.content.ContentValues;

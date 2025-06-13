@@ -1,4 +1,4 @@
-package com.elite.wallet;
+package com.elite.ashshakurcharity;
 
 import android.webkit.WebView;
 
