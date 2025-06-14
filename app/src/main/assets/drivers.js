@@ -92,7 +92,7 @@ function handleFileSelection(event) {
         const reader = new FileReader();
         reader.onload = function (e) {
             const imgElement = document.getElementById("selectedImage");
-            imgElement.src = e.target.result; // Load image preview
+            imgElement.src = e.target.result; 
             imgElement.style.display = "block";
         };
         reader.readAsDataURL(file);
