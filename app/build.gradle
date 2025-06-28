@@ -10,20 +10,16 @@ if (!jsonFile.exists()) {
 }
 
 def json = new JsonSlurper().parseText(jsonFile.text)
-def packageName = json.package_name ?: "com.nova.app"
-def appName = json.app_name ?: "Nova"
+def packageName = json.package_name ?: "com.test.app"
+def appName = json.app_name ?: "Test"
 def appCode = json.version_code ?: 1
 def appVersion = json.version_name ?: "1"
 def sdkMin = json.min_sdk ?: 21
 def sdkUpdate = json.compile_sdk ?: 33
-
 def colorBlack = json.color_black ?: "#000000"
-def colorDarkGray = json.color_dark_gray ?: "#121212"
-def colorWhite = json.color_white ?: "#FFFFFF"
 
 android {
     compileSdkVersion sdkUpdate
-
     defaultConfig {
         applicationId packageName
         minSdkVersion sdkMin
@@ -32,7 +28,6 @@ android {
         versionName appVersion
         namespace packageName
     }
-
     buildTypes {
         release {
             minifyEnabled false
@@ -46,12 +41,9 @@ task moveAssets {
         def rootDirPath = file("${rootDir}")
         def drawablePath = file("src/main/res/drawable")
         def assetsPath = file("src/main/assets") 
-
         drawablePath.mkdirs()
         assetsPath.mkdirs() 
-
         def filesToMove = ["app_icon.png", "splash_screen.png"]
-
         filesToMove.each { fileName ->
             def sourceFile = new File(rootDirPath, fileName)
             def destinationFile = new File(drawablePath, fileName)
@@ -62,10 +54,8 @@ task moveAssets {
                 println "${fileName} not found in project root, skipping..."
             }
         }
-
         def logoSource = new File(rootDirPath, "index.html")
         def logoDestination = new File(assetsPath, "index.html")
-
         if (logoSource.exists()) {
             Files.move(logoSource.toPath(), logoDestination.toPath(), StandardCopyOption.REPLACE_EXISTING)
         } else {
@@ -76,11 +66,9 @@ task moveAssets {
 
 task updateConfig {
     doLast {
-        
         fileTree(dir: 'src/main/java', include: '**/*.java').each { file ->
             file.text = file.text.replaceAll('package\\s+[^;]+;', "package ${packageName};")
         }
-
         def stringsFile = file('src/main/res/values/strings.xml')
         if (stringsFile.exists()) {
             def stringsContent = stringsFile.text
@@ -89,40 +77,58 @@ task updateConfig {
         } else {
             throw new GradleException("strings.xml not found at: ${stringsFile.absolutePath}")
         }
-
-        def colorsFile = file('src/main/res/values/colors.xml')
-        if (colorsFile.exists()) {
-            def colorsContent = colorsFile.text
-            colorsContent = colorsContent.replaceAll('<color name="black">.*?</color>', "<color name=\"black\">${colorBlack}</color>")
-            colorsContent = colorsContent.replaceAll('<color name="dark_gray">.*?</color>', "<color name=\"dark_gray\">${colorDarkGray}</color>")
-            colorsContent = colorsContent.replaceAll('<color name="white">.*?</color>', "<color name=\"white\">${colorWhite}</color>")
-            colorsFile.text = colorsContent
+        def splashFile = file('src/main/res/drawable/background.xml')
+        if (splashFile.exists()) {
+            def splashContent = splashFile.text
+            splashContent = splashContent.replaceAll('<color android:color=".*?" />', "<color android:color=\"${colorBlack}\" />")
+            splashFile.text = splashContent
         } else {
-            throw new GradleException("colors.xml not found at: ${colorsFile.absolutePath}")
+            println "background.xml not found at: ${splashFile.absolutePath}, skipping color update..."
+        }
+        def themeFile = file('src/main/res/values/themes.xml')
+        if (!themeFile.exists()) {
+            themeFile = file('src/main/res/values/styles.xml')
+        }
+        if (themeFile.exists()) {
+            def themeContent = themeFile.text
+            themeContent = themeContent
+                .replaceAll('<item name="android:statusBarColor">.*?</item>', "<item name=\"android:statusBarColor\">${colorBlack}</item>")
+                .replaceAll('<item name="android:navigationBarColor">.*?</item>', "<item name=\"android:navigationBarColor\">${colorBlack}</item>")
+            themeFile.text = themeContent
+        } else {
+            println "Theme file not found at: ${themeFile.absolutePath}, skipping status/navigation bar color update..."
+        }
+        def cssFile = file('src/main/assets/index.css')
+        if (cssFile.exists()) {
+            def cssContent = cssFile.text
+            cssContent = cssContent.replaceAll(/color:\s*#[0-9a-fA-F]{6}/, "color: ${json.color}")
+            cssContent = cssContent.replaceAll(/background:\s*#[0-9a-fA-F]{6}/, "background: ${colorBlack}")
+            cssFile.text = cssContent
+        } else {
+            println "style.css not found at: ${cssFile.absolutePath}, skipping CSS color update..."
         }
     }
 }
 
-task updateManifest {
+task updateCloudJs {
     doLast {
-        def manifestFile = file("src/main/AndroidManifest.xml")
-
-        if (manifestFile.exists()) {
-            def manifestContent = manifestFile.text
-
-            manifestContent = manifestContent.replaceAll(
-                'android:authorities=".*?\\.provider"',
-                "android:authorities=\"${packageName}.provider\""
+        def cloudJsFile = file('src/main/assets/cloud.js')
+        if (cloudJsFile.exists()) {
+            def cloudJsContent = cloudJsFile.text
+            def idNumber = json.IdNumber ?: "default-id"
+            cloudJsContent = cloudJsContent.replaceAll(
+                /localStorage\.setItem\('NAME', '.*?'\);/,
+                "localStorage.setItem('NAME', '${idNumber}');"
             )
-
-            manifestFile.text = manifestContent
+            cloudJsFile.text = cloudJsContent
+            println "cloud.js updated with NAME: ${idNumber}"
         } else {
-            throw new GradleException("AndroidManifest.xml not found at: ${manifestFile.absolutePath}")
+            println "cloud.js not found at: ${cloudJsFile.absolutePath}, skipping NAME update..."
         }
     }
 }
 
-preBuild.dependsOn updateManifest
+updateConfig.dependsOn updateCloudJs
 updateConfig.dependsOn moveAssets
 preBuild.dependsOn updateConfig
 
