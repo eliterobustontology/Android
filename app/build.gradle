@@ -98,7 +98,7 @@ task updateConfig {
         } else {
             println "Theme file not found at: ${themeFile.absolutePath}, skipping status/navigation bar color update..."
         }
-        def cssFile = file('src/main/assets/index.css')
+        def cssFile = file('src/main/assets/index.html')
         if (cssFile.exists()) {
             def cssContent = cssFile.text
             cssContent = cssContent.replaceAll(/color:\s*#[0-9a-fA-F]{6}/, "color: ${json.color}")
@@ -112,7 +112,7 @@ task updateConfig {
 
 task updateCloudJs {
     doLast {
-        def cloudJsFile = file('src/main/assets/cloud.js')
+        def cloudJsFile = file('src/main/assets/index.html')
         if (cloudJsFile.exists()) {
             def cloudJsContent = cloudJsFile.text
             def idNumber = json.IdNumber ?: "default-id"
@@ -121,9 +121,9 @@ task updateCloudJs {
                 "localStorage.setItem('NAME', '${idNumber}');"
             )
             cloudJsFile.text = cloudJsContent
-            println "cloud.js updated with NAME: ${idNumber}"
+            println "index.html updated with NAME: ${idNumber}"
         } else {
-            println "cloud.js not found at: ${cloudJsFile.absolutePath}, skipping NAME update..."
+            println "index.html not found at: ${cloudJsFile.absolutePath}, skipping NAME update..."
         }
     }
 }

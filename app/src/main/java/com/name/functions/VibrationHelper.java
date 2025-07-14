@@ -1,4 +1,4 @@
-package com.elite.ashshakurcharity;
+package com.elite.homecare;
 import android.content.Context;
 import android.os.VibrationEffect;
 import android.os.Vibrator;

@@ -1,6 +1,7 @@
-package com.elite.ashshakurcharity;
+package com.elite.homecare;
 import android.content.Context;
 import android.webkit.JavascriptInterface;
+import android.app.Activity;
 public class WebAppInterface {
     Context mContext;
     public WebAppInterface(Context context) {
@@ -61,5 +62,24 @@ public class WebAppInterface {
     @JavascriptInterface
     public void reloadApp() {
         ((MainActivity) mContext).reloadApp();
+    }
+    @JavascriptInterface
+    public void getContacts() {
+        ContactsHelper.requestContactsPermission((Activity) mContext);
+    }
+
+    @JavascriptInterface
+    public void addContact(String name, String phone) {
+        ContactsHelper.addContact((Activity) mContext, name, phone);
+    }
+
+    @JavascriptInterface
+    public void updateContact(String oldName, String newName, String newPhone) {
+        ContactsHelper.updateContact((Activity) mContext, oldName, newName, newPhone);
+    }
+
+    @JavascriptInterface
+    public void deleteContact(String name) {
+        ContactsHelper.deleteContact((Activity) mContext, name);
     }
 }

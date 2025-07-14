@@ -1,11 +1,11 @@
 {
-    "package_name": "com.elite.ashshakurcharity",
-    "app_name": "ASCAO Manager",
+    "package_name": "com.elite.homecare",
+    "app_name": "Home Care",
     "version_code": 1,
     "version_name": "1",
     "min_sdk": 21,
     "compile_sdk": 33,
     "color_black": "#333333",
     "color":"#ffffff",
-    "IdNumber":"8e66d79d-84b7-4ba0-9d60-0e74189675c45"
+    "IdNumber":"dlqhjsforruglbalrdhiqlchmlooiqxb"
 }

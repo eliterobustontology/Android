@@ -1,4 +1,4 @@
-package com.elite.ashshakurcharity;
+package com.elite.homecare;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;

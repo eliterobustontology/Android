@@ -1,4 +1,4 @@
-package com.elite.ashshakurcharity;
+package com.elite.homecare;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.content.Intent;
@@ -10,6 +10,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import org.json.JSONObject;
 public class MainActivity extends AppCompatActivity {
     private WebView webView;
     public static final int FILE_PICKER_REQUEST_CODE = 1001;
@@ -17,6 +18,7 @@ public class MainActivity extends AppCompatActivity {
     public static final int CAMERA_PERMISSION_REQUEST_CODE = 2001;
     public static final int MICROPHONE_PERMISSION_REQUEST_CODE = 3001;
     public static final int NOTIFICATION_PERMISSION_REQUEST_CODE = 4001;
+    public static final int CONTACTS_PERMISSION_REQUEST_CODE = 5001;
     private boolean isVideoCapture = false;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -67,6 +69,20 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 ToastHelper.showToast(this, "Microphone permission denied.");
             }
+        } else if (requestCode == ContactsHelper.CONTACTS_PERMISSION_REQUEST_CODE) {
+            boolean granted = true;
+            for (int result : grantResults) {
+                if (result != PackageManager.PERMISSION_GRANTED) {
+                    granted = false;
+                    break;
+                }
+            }
+            if (granted) {
+                String contactsJson = ContactsHelper.getAllContactsJson(this);
+                webView.evaluateJavascript("javascript:onContactsFetched(" + JSONObject.quote(contactsJson) + ")", null);
+            } else {
+                ToastHelper.showToast(this, "Contacts permission denied.");
+            }
         }
     }
     public void requestCameraPermission(boolean forVideo) {
@@ -100,5 +116,8 @@ public class MainActivity extends AppCompatActivity {
     }
     public void reloadApp() {
         AppReloadHelper.reloadApp(this);
+    }
+    public WebView getWebView() {
+        return webView;
     }
 }
