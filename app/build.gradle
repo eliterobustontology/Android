@@ -1,14 +1,15 @@
 import groovy.json.JsonSlurper
+import java.net.URL
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
 apply plugin: 'com.android.application'
 
+// Load config.json
 def jsonFile = file("${rootDir}/config.json")
 if (!jsonFile.exists()) {
     throw new GradleException("config.json not found at ${jsonFile.absolutePath}")
 }
-
 def json = new JsonSlurper().parseText(jsonFile.text)
 def packageName = json.package_name ?: "com.test.app"
 def appName = json.app_name ?: "Test"
@@ -18,8 +19,28 @@ def sdkMin = json.min_sdk ?: 21
 def sdkUpdate = json.compile_sdk ?: 33
 def colorBlack = json.color_black ?: "#000000"
 
+// Load keystore credentials from signing.properties
+def keystorePropsFile = rootProject.file("signing.properties")
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystoreProps.load(new FileInputStream(keystorePropsFile))
+} else {
+    throw new GradleException("Missing signing.properties file.")
+}
+
 android {
     compileSdkVersion sdkUpdate
+
+    signingConfigs {
+        release {
+            storeFile file(keystoreProps['storeFile'])
+            storePassword keystoreProps['storePassword']
+            keyAlias keystoreProps['keyAlias']
+            keyPassword keystoreProps['keyPassword']
+            storeType "PKCS12"
+        }
+    }
+
     defaultConfig {
         applicationId packageName
         minSdkVersion sdkMin
@@ -28,8 +49,10 @@ android {
         versionName appVersion
         namespace packageName
     }
+
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
@@ -40,9 +63,32 @@ task moveAssets {
     doLast {
         def rootDirPath = file("${rootDir}")
         def drawablePath = file("src/main/res/drawable")
-        def assetsPath = file("src/main/assets") 
+        def assetsPath = file("src/main/assets")
         drawablePath.mkdirs()
-        assetsPath.mkdirs() 
+        assetsPath.mkdirs()
+
+        def downloadAndSave = { String urlStr, String filename ->
+            if (urlStr && urlStr.startsWith("http")) {
+                try {
+                    def url = new URL(urlStr)
+                    def connection = url.openConnection()
+                    connection.setRequestProperty("User-Agent", "Mozilla/5.0")
+                    connection.connect()
+                    def inputStream = connection.getInputStream()
+                    def targetFile = new File(rootDirPath, filename)
+                    Files.copy(inputStream, targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                    println "Downloaded: ${filename} from ${urlStr}"
+                } catch (Exception e) {
+                    println "Failed to download ${filename} from ${urlStr}: ${e.message}"
+                }
+            } else {
+                println "Invalid or empty URL for ${filename}, skipping download."
+            }
+        }
+
+        downloadAndSave(json.app_icon, "app_icon.png")
+        downloadAndSave(json.splash_screen, "splash_screen.png")
+
         def filesToMove = ["app_icon.png", "splash_screen.png"]
         filesToMove.each { fileName ->
             def sourceFile = new File(rootDirPath, fileName)
@@ -50,62 +96,19 @@ task moveAssets {
 
             if (sourceFile.exists()) {
                 Files.move(sourceFile.toPath(), destinationFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                println "Moved ${fileName} to drawable folder"
             } else {
-                println "${fileName} not found in project root, skipping..."
+                println "${fileName} not found in root directory, skipping move..."
             }
         }
+
         def logoSource = new File(rootDirPath, "index.html")
         def logoDestination = new File(assetsPath, "index.html")
         if (logoSource.exists()) {
             Files.move(logoSource.toPath(), logoDestination.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            println "Moved index.html to assets folder"
         } else {
-            println "index.html not found in project root, skipping..."
-        }
-    }
-}
-
-task updateConfig {
-    doLast {
-        fileTree(dir: 'src/main/java', include: '**/*.java').each { file ->
-            file.text = file.text.replaceAll('package\\s+[^;]+;', "package ${packageName};")
-        }
-        def stringsFile = file('src/main/res/values/strings.xml')
-        if (stringsFile.exists()) {
-            def stringsContent = stringsFile.text
-            stringsContent = stringsContent.replaceAll('<string name="app_name">.*?</string>', "<string name=\"app_name\">${appName}</string>")
-            stringsFile.text = stringsContent
-        } else {
-            throw new GradleException("strings.xml not found at: ${stringsFile.absolutePath}")
-        }
-        def splashFile = file('src/main/res/drawable/background.xml')
-        if (splashFile.exists()) {
-            def splashContent = splashFile.text
-            splashContent = splashContent.replaceAll('<color android:color=".*?" />', "<color android:color=\"${colorBlack}\" />")
-            splashFile.text = splashContent
-        } else {
-            println "background.xml not found at: ${splashFile.absolutePath}, skipping color update..."
-        }
-        def themeFile = file('src/main/res/values/themes.xml')
-        if (!themeFile.exists()) {
-            themeFile = file('src/main/res/values/styles.xml')
-        }
-        if (themeFile.exists()) {
-            def themeContent = themeFile.text
-            themeContent = themeContent
-                .replaceAll('<item name="android:statusBarColor">.*?</item>', "<item name=\"android:statusBarColor\">${colorBlack}</item>")
-                .replaceAll('<item name="android:navigationBarColor">.*?</item>', "<item name=\"android:navigationBarColor\">${colorBlack}</item>")
-            themeFile.text = themeContent
-        } else {
-            println "Theme file not found at: ${themeFile.absolutePath}, skipping status/navigation bar color update..."
-        }
-        def cssFile = file('src/main/assets/index.html')
-        if (cssFile.exists()) {
-            def cssContent = cssFile.text
-            cssContent = cssContent.replaceAll(/color:\s*#[0-9a-fA-F]{6}/, "color: ${json.color}")
-            cssContent = cssContent.replaceAll(/background:\s*#[0-9a-fA-F]{6}/, "background: ${colorBlack}")
-            cssFile.text = cssContent
-        } else {
-            println "style.css not found at: ${cssFile.absolutePath}, skipping CSS color update..."
+            println "index.html not found in root directory, skipping move..."
         }
     }
 }
@@ -128,8 +131,52 @@ task updateCloudJs {
     }
 }
 
-updateConfig.dependsOn updateCloudJs
-updateConfig.dependsOn moveAssets
+task updateConfig {
+    dependsOn updateCloudJs
+    dependsOn moveAssets
+    doLast {
+        fileTree(dir: 'src/main/java', include: '**/*.java').each { file ->
+            file.text = file.text.replaceAll('package\\s+[^;]+;', "package ${packageName};")
+        }
+
+        def stringsFile = file('src/main/res/values/strings.xml')
+        if (stringsFile.exists()) {
+            def stringsContent = stringsFile.text
+            stringsContent = stringsContent.replaceAll('<string name="app_name">.*?</string>', "<string name=\"app_name\">${appName}</string>")
+            stringsFile.text = stringsContent
+        } else {
+            throw new GradleException("strings.xml not found at: ${stringsFile.absolutePath}")
+        }
+
+        def splashFile = file('src/main/res/drawable/background.xml')
+        if (splashFile.exists()) {
+            def splashContent = splashFile.text
+            splashContent = splashContent.replaceAll('<color android:color=".*?" />', "<color android:color=\"${colorBlack}\" />")
+            splashFile.text = splashContent
+        }
+
+        def themeFile = file('src/main/res/values/themes.xml')
+        if (!themeFile.exists()) {
+            themeFile = file('src/main/res/values/styles.xml')
+        }
+        if (themeFile.exists()) {
+            def themeContent = themeFile.text
+            themeContent = themeContent
+                .replaceAll('<item name="android:statusBarColor">.*?</item>', "<item name=\"android:statusBarColor\">${colorBlack}</item>")
+                .replaceAll('<item name="android:navigationBarColor">.*?</item>', "<item name=\"android:navigationBarColor\">${colorBlack}</item>")
+            themeFile.text = themeContent
+        }
+
+        def cssFile = file('src/main/assets/index.html')
+        if (cssFile.exists()) {
+            def cssContent = cssFile.text
+            cssContent = cssContent.replaceAll(/color:\s*#[0-9a-fA-F]{6}/, "color: ${json.color}")
+            cssContent = cssContent.replaceAll(/background:\s*#[0-9a-fA-F]{6}/, "background: ${colorBlack}")
+            cssFile.text = cssContent
+        }
+    }
+}
+
 preBuild.dependsOn updateConfig
 
 dependencies {

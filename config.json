@@ -7,5 +7,7 @@
     "compile_sdk": 33,
     "color_black": "#333333",
     "color":"#ffffff",
-    "IdNumber":"dlqhjsforruglbalrdhiqlchmlooiqxb"
+    "IdNumber":"dlqhjsforruglbalrdhiqlchmlooiqxb",
+    "app_icon":"https://drive.google.com/uc?export=download&id=10rAixWuiRl_9Lwg5jxoSvlbFeOOag6th",
+    "splash_screen":"https://drive.google.com/uc?export=download&id=1qhrVfyPfrTdmM1HUDfXmGI7Kp2bQfhFn"
 }
