@@ -3,8 +3,8 @@ name: Build Android APK & AAB
 on:
   push:
     branches:
-      - main  # or replace with your branch name
-  workflow_dispatch:  # allows manual trigger from GitHub UI
+      - main  # change if your main branch has a different name
+  workflow_dispatch:  # manual trigger
 
 jobs:
   build:
@@ -30,13 +30,13 @@ jobs:
         run: ./gradlew bundleRelease
 
       - name: Upload APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
           path: app/build/outputs/apk/release/*.apk
 
       - name: Upload AAB
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: app-release-aab
           path: app/build/outputs/bundle/release/*.aab
