@@ -1,27 +1,26 @@
-name: Android Build
+name: Build Android APK & AAB
 
 on:
   push:
     branches:
-      - main  # or your main branch name
-  workflow_dispatch:  # Allows manual trigger from GitHub UI
+      - main  # change if your main branch has a different name
+  workflow_dispatch:  # manual trigger
 
 jobs:
   build:
-    name: Build APK and AAB
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up JDK 17
+      - name: Set up Java (JDK 17)
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Grant execute permission for gradlew
+      - name: Make Gradle executable
         run: chmod +x ./gradlew
 
       - name: Build APK
@@ -31,13 +30,13 @@ jobs:
         run: ./gradlew bundleRelease
 
       - name: Upload APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
           path: app/build/outputs/apk/release/*.apk
 
       - name: Upload AAB
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: app-release-aab
           path: app/build/outputs/bundle/release/*.aab
