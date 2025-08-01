@@ -26,7 +26,7 @@ def appVersion = json.version_name ?: "1"
 def sdkMin = safeInt(json.min_sdk, 21)
 def sdkUpdate = safeInt(json.compile_sdk, 34)
 def colorBlack = json.color_black ?: "#000000"
-def colorPrimary = json.color ?: "#FFFFFF"  
+def colorPrimary = json.color ?: "#FFFFFF"
 
 def keystorePropsFile = rootProject.file("signing.properties")
 def keystoreProps = new Properties()
@@ -54,14 +54,15 @@ android {
             storePassword keystoreProps['storePassword']
             keyAlias keystoreProps['keyAlias']
             keyPassword keystoreProps['keyPassword']
-            storeType "pkcs12"  
+            storeType "pkcs12"
         }
     }
 
     buildTypes {
         release {
             signingConfig signingConfigs.release
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
@@ -205,9 +206,11 @@ task copyAabToRoot(type: Copy) {
     dependsOn "bundleRelease"
     from("$buildDir/outputs/bundle/release/")
     include("*.aab")
+    from("$buildDir/outputs/mapping/release/")
+    include("mapping.txt")
     into("$rootDir/output")
     doLast {
-        println "✅ AAB copied to ${rootDir}/output"
+        println "✅ AAB and mapping.txt copied to ${rootDir}/output"
     }
 }
 
