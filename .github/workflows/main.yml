@@ -1,4 +1,4 @@
-name: Android Build (Debug)
+name: Android Build (Release)
 
 on:
   push:
@@ -23,26 +23,25 @@ jobs:
       - name: Make Gradle Wrapper executable
         run: chmod +x gradlew
 
-      - name: Build APK (Debug)
-        run: ./gradlew :app:assembleDebug
+      - name: Decode PFX Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.pfx
 
-      - name: Build AAB (Debug)
-        run: ./gradlew :app:bundleDebug
+      - name: Create signing.properties for .pfx
+        run: |
+          echo "storeFile=keystore.pfx" > signing.properties
+          echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" >> signing.properties
+          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> signing.properties
+          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> signing.properties
 
-      - name: List APK output
-        run: find app/build/outputs/apk/debug -name "*.apk"
+      - name: Build Signed AAB (Release)
+        run: ./gradlew :app:bundleRelease
 
-      - name: List AAB output
-        run: find app/build/outputs/bundle/debug -name "*.aab"
+      - name: List AAB Output
+        run: find app/build/outputs/bundle/release -name "*.aab"
 
-      - name: Upload APK artifact
+      - name: Upload Signed AAB Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
-
-      - name: Upload AAB artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug-aab
-          path: app/build/outputs/bundle/debug/*.aab
+          name: app-release-aab
+          path: app/build/outputs/bundle/release/*.aab
