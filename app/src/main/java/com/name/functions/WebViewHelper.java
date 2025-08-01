@@ -1,4 +1,4 @@
-package com.elite.homecare;
+package com.elite.qel_medistore;
 import android.content.Context;
 import android.webkit.WebSettings;
 import android.webkit.WebView;

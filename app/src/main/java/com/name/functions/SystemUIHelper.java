@@ -1,4 +1,4 @@
-package com.elite.homecare;
+package com.elite.qel_medistore;
 import android.app.Activity;
 import android.os.Build;
 import android.view.View;

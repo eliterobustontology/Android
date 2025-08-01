@@ -1,4 +1,4 @@
-package com.elite.homecare;
+package com.elite.qel_medistore;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 public class WebViewZoomHelper {

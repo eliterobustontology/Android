@@ -187,7 +187,7 @@ task updateConfig {
 }
 
 task copyAabToRoot(type: Copy) {
-    dependsOn bundleRelease
+    dependsOn "bundleRelease"
     from("$buildDir/outputs/bundle/release/")
     include("*.aab")
     into("$rootDir/output")
@@ -197,6 +197,8 @@ task copyAabToRoot(type: Copy) {
 }
 
 preBuild.dependsOn updateConfig
+
+build.finalizedBy copyAabToRoot
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.4.0'
