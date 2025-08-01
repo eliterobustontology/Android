@@ -1,4 +1,4 @@
-name: Android Build (Release)
+name: Android Build (Debug)
 
 on:
   push:
@@ -23,20 +23,26 @@ jobs:
       - name: Make Gradle Wrapper executable
         run: chmod +x gradlew
 
-      - name: Ensure Android/app/keys directory exists
-        run: mkdir -p Android/app/keys
+      - name: Build APK (Debug)
+        run: ./gradlew :app:assembleDebug
 
-      - name: Decode advance_native.pfx keystore to Android/app/keys folder
-        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > Android/app/keys/advance_native.pfx
+      - name: Build AAB (Debug)
+        run: ./gradlew :app:bundleDebug
 
-      - name: Build Signed AAB (Release)
-        run: ./gradlew :app:bundleRelease --stacktrace
+      - name: List APK output
+        run: find app/build/outputs/apk/debug -name "*.apk"
 
-      - name: List AAB Output
-        run: find app/build/outputs/bundle/release -name "*.aab"
+      - name: List AAB output
+        run: find app/build/outputs/bundle/debug -name "*.aab"
 
-      - name: Upload Signed AAB Artifact
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-aab
-          path: app/build/outputs/bundle/release/*.aab
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-aab
+          path: app/build/outputs/bundle/debug/*.aab
