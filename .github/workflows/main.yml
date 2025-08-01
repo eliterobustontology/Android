@@ -2,8 +2,7 @@ name: Android Build (Release)
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -23,13 +22,13 @@ jobs:
       - name: 🔧 Make Gradle Wrapper executable
         run: chmod +x gradlew
 
-      - name: 🔐 Decode PFX Keystore to project root
+      - name: 🔐 Decode advance_native.pfx keystore to project root
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.pfx
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > advance_native.pfx
 
       - name: 📝 Create signing.properties in project root
         run: |
-          echo "storeFile=keystore.pfx" > signing.properties
+          echo "storeFile=advance_native.pfx" > signing.properties
           echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" >> signing.properties
           echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> signing.properties
           echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> signing.properties
