@@ -5,14 +5,12 @@ import java.nio.file.StandardCopyOption
 
 apply plugin: 'com.android.application'
 
-// Load config.json and parse values
 def jsonFile = file("${rootDir}/config.json")
 if (!jsonFile.exists()) {
     throw new GradleException("config.json not found at ${jsonFile.absolutePath}")
 }
 def json = new JsonSlurper().parseText(jsonFile.text)
 
-// Helper function to safely parse int
 def safeInt(value, defaultVal) {
     try {
         return value.toInteger()
@@ -26,11 +24,10 @@ def appName = json.app_name ?: "Test"
 def appCode = safeInt(json.version_code, 1)
 def appVersion = json.version_name ?: "1"
 def sdkMin = safeInt(json.min_sdk, 21)
-def sdkUpdate = safeInt(json.compile_sdk, 33)
+def sdkUpdate = safeInt(json.compile_sdk, 34)
 def colorBlack = json.color_black ?: "#000000"
-def colorPrimary = json.color ?: "#FFFFFF"  // fallback color for css
+def colorPrimary = json.color ?: "#FFFFFF"  
 
-// Load signing.properties
 def keystorePropsFile = rootProject.file("signing.properties")
 def keystoreProps = new Properties()
 if (keystorePropsFile.exists()) {
@@ -57,7 +54,7 @@ android {
             storePassword keystoreProps['storePassword']
             keyAlias keystoreProps['keyAlias']
             keyPassword keystoreProps['keyPassword']
-            storeType "pkcs12"  // lowercase, important for .pfx files
+            storeType "pkcs12"  
         }
     }
 
@@ -82,7 +79,6 @@ android {
     }
 }
 
-// Task: Download assets and move to drawable/assets
 task moveAssets {
     doLast {
         def rootDirPath = file("${rootDir}")
@@ -135,7 +131,6 @@ task moveAssets {
     }
 }
 
-// Task: Update index.html to set localStorage 'NAME'
 task updateCloudJs {
     dependsOn moveAssets
     doLast {
@@ -155,16 +150,13 @@ task updateCloudJs {
     }
 }
 
-// Task: Update Java package names, strings.xml, colors, and CSS styles
 task updateConfig {
     dependsOn updateCloudJs
     doLast {
-        // Update Java package declarations
         fileTree(dir: 'src/main/java', include: '**/*.java').each { file ->
             file.text = file.text.replaceAll(/package\s+[^;]+;/, "package ${packageName};")
         }
 
-        // Update strings.xml app_name
         def stringsFile = file('src/main/res/values/strings.xml')
         if (stringsFile.exists()) {
             def stringsContent = stringsFile.text
@@ -177,7 +169,6 @@ task updateConfig {
             throw new GradleException("strings.xml not found at: ${stringsFile.absolutePath}")
         }
 
-        // Update splash screen background color
         def splashFile = file('src/main/res/drawable/background.xml')
         if (splashFile.exists()) {
             def splashContent = splashFile.text
@@ -188,7 +179,6 @@ task updateConfig {
             splashFile.text = splashContent
         }
 
-        // Update status and navigation bar colors in themes.xml or styles.xml
         def themeFile = file('src/main/res/values/themes.xml')
         if (!themeFile.exists()) {
             themeFile = file('src/main/res/values/styles.xml')
@@ -201,7 +191,6 @@ task updateConfig {
             themeFile.text = themeContent
         }
 
-        // Update CSS colors inside index.html assets file
         def cssFile = file('src/main/assets/index.html')
         if (cssFile.exists()) {
             def cssContent = cssFile.text
@@ -212,7 +201,6 @@ task updateConfig {
     }
 }
 
-// Task: Copy the generated AAB to root/output folder
 task copyAabToRoot(type: Copy) {
     dependsOn "bundleRelease"
     from("$buildDir/outputs/bundle/release/")
