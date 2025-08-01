@@ -23,19 +23,15 @@ jobs:
       - name: Make Gradle Wrapper executable
         run: chmod +x gradlew
 
-      - name: Decode advance_native.pfx keystore to app folder
+      - name: Decode advance_native.pfx keystore to android/app/keys folder
         run: |
-          mkdir -p app
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/advance_native.pfx
-
-      - name: Create signing.properties at root
-        run: |
-          echo "storeFile=app/advance_native.pfx" > signing.properties
-          echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" >> signing.properties
-          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> signing.properties
-          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> signing.properties
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/keys/advance_native.pfx
 
       - name: Build Signed AAB (Release)
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew :app:bundleRelease --stacktrace
 
       - name: List AAB Output
