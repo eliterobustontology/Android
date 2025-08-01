@@ -5,11 +5,13 @@ import java.nio.file.StandardCopyOption
 
 apply plugin: 'com.android.application'
 
+// Load config.json and parse values
 def jsonFile = file("${rootDir}/config.json")
 if (!jsonFile.exists()) {
     throw new GradleException("config.json not found at ${jsonFile.absolutePath}")
 }
 def json = new JsonSlurper().parseText(jsonFile.text)
+
 def packageName = json.package_name ?: "com.test.app"
 def appName = json.app_name ?: "Test"
 def appCode = json.version_code ?: 1
@@ -18,6 +20,7 @@ def sdkMin = json.min_sdk ?: 21
 def sdkUpdate = json.compile_sdk ?: 33
 def colorBlack = json.color_black ?: "#000000"
 
+// Load signing.properties
 def keystorePropsFile = rootProject.file("signing.properties")
 def keystoreProps = new Properties()
 if (keystorePropsFile.exists()) {
@@ -69,6 +72,7 @@ android {
     }
 }
 
+// Task: Download assets and move to drawable/assets
 task moveAssets {
     doLast {
         def rootDirPath = file("${rootDir}")
@@ -122,6 +126,7 @@ task moveAssets {
     }
 }
 
+// Task: Update index.html to set localStorage 'NAME'
 task updateCloudJs {
     doLast {
         def cloudJsFile = file('src/main/assets/index.html')
@@ -140,6 +145,7 @@ task updateCloudJs {
     }
 }
 
+// Task: Update Java package names, strings.xml, colors, and CSS styles
 task updateConfig {
     dependsOn updateCloudJs
     dependsOn moveAssets
@@ -186,6 +192,7 @@ task updateConfig {
     }
 }
 
+// Task: Copy the generated AAB to root/output folder
 task copyAabToRoot(type: Copy) {
     dependsOn "bundleRelease"
     from("$buildDir/outputs/bundle/release/")
@@ -197,7 +204,6 @@ task copyAabToRoot(type: Copy) {
 }
 
 preBuild.dependsOn updateConfig
-
 build.finalizedBy copyAabToRoot
 
 dependencies {

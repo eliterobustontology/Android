@@ -28,15 +28,15 @@ jobs:
           mkdir -p app
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/advance_native.pfx
 
-      - name: Create signing.properties with correct keystore path
+      - name: Create signing.properties at root
         run: |
-          echo "storeFile=signing.properties" > signing.properties
+          echo "storeFile=app/advance_native.pfx" > signing.properties
           echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" >> signing.properties
           echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> signing.properties
           echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> signing.properties
 
       - name: Build Signed AAB (Release)
-        run: ./gradlew :app:bundleRelease
+        run: ./gradlew :app:bundleRelease --stacktrace
 
       - name: List AAB Output
         run: find app/build/outputs/bundle/release -name "*.aab"
