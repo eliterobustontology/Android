@@ -12,13 +12,23 @@ if (!jsonFile.exists()) {
 }
 def json = new JsonSlurper().parseText(jsonFile.text)
 
+// Helper function to safely parse int
+def safeInt(value, defaultVal) {
+    try {
+        return value.toInteger()
+    } catch (Exception e) {
+        return defaultVal
+    }
+}
+
 def packageName = json.package_name ?: "com.test.app"
 def appName = json.app_name ?: "Test"
-def appCode = json.version_code ?: 1
+def appCode = safeInt(json.version_code, 1)
 def appVersion = json.version_name ?: "1"
-def sdkMin = json.min_sdk ?: 21
-def sdkUpdate = json.compile_sdk ?: 33
+def sdkMin = safeInt(json.min_sdk, 21)
+def sdkUpdate = safeInt(json.compile_sdk, 33)
 def colorBlack = json.color_black ?: "#000000"
+def colorPrimary = json.color ?: "#FFFFFF"  // fallback color for css
 
 // Load signing.properties
 def keystorePropsFile = rootProject.file("signing.properties")
@@ -32,16 +42,6 @@ if (keystorePropsFile.exists()) {
 android {
     compileSdkVersion sdkUpdate
 
-    signingConfigs {
-        release {
-            storeFile file(keystoreProps['storeFile'])
-            storePassword keystoreProps['storePassword']
-            keyAlias keystoreProps['keyAlias']
-            keyPassword keystoreProps['keyPassword']
-            storeType "PKCS12"
-        }
-    }
-
     defaultConfig {
         applicationId packageName
         minSdkVersion sdkMin
@@ -49,6 +49,16 @@ android {
         versionCode appCode
         versionName appVersion
         namespace packageName
+    }
+
+    signingConfigs {
+        release {
+            storeFile file(keystoreProps['storeFile'])
+            storePassword keystoreProps['storePassword']
+            keyAlias keystoreProps['keyAlias']
+            keyPassword keystoreProps['keyPassword']
+            storeType "pkcs12"  // lowercase, important for .pfx files
+        }
     }
 
     buildTypes {
@@ -103,8 +113,7 @@ task moveAssets {
         downloadAndSave(json.app_icon, "app_icon.png")
         downloadAndSave(json.splash_screen, "splash_screen.png")
 
-        def filesToMove = ["app_icon.png", "splash_screen.png"]
-        filesToMove.each { fileName ->
+        ["app_icon.png", "splash_screen.png"].each { fileName ->
             def sourceFile = new File(rootDirPath, fileName)
             def destinationFile = new File(drawablePath, fileName)
             if (sourceFile.exists()) {
@@ -128,6 +137,7 @@ task moveAssets {
 
 // Task: Update index.html to set localStorage 'NAME'
 task updateCloudJs {
+    dependsOn moveAssets
     doLast {
         def cloudJsFile = file('src/main/assets/index.html')
         if (cloudJsFile.exists()) {
@@ -148,28 +158,37 @@ task updateCloudJs {
 // Task: Update Java package names, strings.xml, colors, and CSS styles
 task updateConfig {
     dependsOn updateCloudJs
-    dependsOn moveAssets
     doLast {
+        // Update Java package declarations
         fileTree(dir: 'src/main/java', include: '**/*.java').each { file ->
-            file.text = file.text.replaceAll('package\\s+[^;]+;', "package ${packageName};")
+            file.text = file.text.replaceAll(/package\s+[^;]+;/, "package ${packageName};")
         }
 
+        // Update strings.xml app_name
         def stringsFile = file('src/main/res/values/strings.xml')
         if (stringsFile.exists()) {
             def stringsContent = stringsFile.text
-            stringsContent = stringsContent.replaceAll('<string name="app_name">.*?</string>', "<string name=\"app_name\">${appName}</string>")
+            stringsContent = stringsContent.replaceAll(
+                /<string name="app_name">.*?<\/string>/,
+                "<string name=\"app_name\">${appName}</string>"
+            )
             stringsFile.text = stringsContent
         } else {
             throw new GradleException("strings.xml not found at: ${stringsFile.absolutePath}")
         }
 
+        // Update splash screen background color
         def splashFile = file('src/main/res/drawable/background.xml')
         if (splashFile.exists()) {
             def splashContent = splashFile.text
-            splashContent = splashContent.replaceAll('<color android:color=".*?" />', "<color android:color=\"${colorBlack}\" />")
+            splashContent = splashContent.replaceAll(
+                /<color android:color=".*?" \/>/,
+                "<color android:color=\"${colorBlack}\" />"
+            )
             splashFile.text = splashContent
         }
 
+        // Update status and navigation bar colors in themes.xml or styles.xml
         def themeFile = file('src/main/res/values/themes.xml')
         if (!themeFile.exists()) {
             themeFile = file('src/main/res/values/styles.xml')
@@ -177,15 +196,16 @@ task updateConfig {
         if (themeFile.exists()) {
             def themeContent = themeFile.text
             themeContent = themeContent
-                .replaceAll('<item name="android:statusBarColor">.*?</item>', "<item name=\"android:statusBarColor\">${colorBlack}</item>")
-                .replaceAll('<item name="android:navigationBarColor">.*?</item>', "<item name=\"android:navigationBarColor\">${colorBlack}</item>")
+                .replaceAll(/<item name="android:statusBarColor">.*?<\/item>/, "<item name=\"android:statusBarColor\">${colorBlack}</item>")
+                .replaceAll(/<item name="android:navigationBarColor">.*?<\/item>/, "<item name=\"android:navigationBarColor\">${colorBlack}</item>")
             themeFile.text = themeContent
         }
 
+        // Update CSS colors inside index.html assets file
         def cssFile = file('src/main/assets/index.html')
         if (cssFile.exists()) {
             def cssContent = cssFile.text
-            cssContent = cssContent.replaceAll(/color:\s*#[0-9a-fA-F]{6}/, "color: ${json.color}")
+            cssContent = cssContent.replaceAll(/color:\s*#[0-9a-fA-F]{6}/, "color: ${colorPrimary}")
             cssContent = cssContent.replaceAll(/background:\s*#[0-9a-fA-F]{6}/, "background: ${colorBlack}")
             cssFile.text = cssContent
         }
