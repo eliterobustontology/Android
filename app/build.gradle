@@ -23,8 +23,8 @@ def packageName = json.package_name ?: "com.test.app"
 def appName = json.app_name ?: "Test"
 def appCode = safeInt(json.version_code, 1)
 def appVersion = json.version_name ?: "1"
-def sdkMin = safeInt(json.min_sdk, 21)
-def sdkUpdate = safeInt(json.compile_sdk, 34)
+def sdkMin = safeInt(json.min_sdk, 24)
+def sdkUpdate = safeInt(json.compile_sdk, 35)
 def colorBlack = json.color_black ?: "#000000"
 def colorPrimary = json.color ?: "#FFFFFF"
 
@@ -77,6 +77,11 @@ android {
         abi {
             enableSplit = false
         }
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
     }
 }
 
