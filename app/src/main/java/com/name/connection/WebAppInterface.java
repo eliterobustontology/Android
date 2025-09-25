@@ -82,9 +82,12 @@ public class WebAppInterface {
     public void deleteContact(String name) {
         ContactsHelper.deleteContact((Activity) mContext, name);
     }
+    
     @JavascriptInterface
     public void openAppOrWebsite(String packageName, String fallbackUrl) {
-        ((MainActivity) context).openTargetAppOrWeb(packageName, fallbackUrl);
+        if (mContext instanceof MainActivity) {
+            ((MainActivity) mContext).openTargetAppOrWeb(packageName, fallbackUrl);
+        }
     }
 
 }
