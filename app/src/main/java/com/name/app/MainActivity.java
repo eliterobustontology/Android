@@ -120,4 +120,7 @@ public class MainActivity extends AppCompatActivity {
     public WebView getWebView() {
         return webView;
     }
+    public void openTargetAppOrWeb(String packageName, String fallbackUrl) {
+        AppLauncherHelper.openAppOrWebsite(this, packageName, fallbackUrl, webView);
+    }
 }
