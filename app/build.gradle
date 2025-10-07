@@ -5,12 +5,14 @@ import java.nio.file.StandardCopyOption
 
 apply plugin: 'com.android.application'
 
+// Load JSON config
 def jsonFile = file("${rootDir}/config.json")
 if (!jsonFile.exists()) {
     throw new GradleException("config.json not found at ${jsonFile.absolutePath}")
 }
 def json = new JsonSlurper().parseText(jsonFile.text)
 
+// Utility function for safe integer parsing
 def safeInt(value, defaultVal) {
     try {
         return value.toInteger()
@@ -19,6 +21,7 @@ def safeInt(value, defaultVal) {
     }
 }
 
+// Read values from config.json
 def packageName = json.package_name ?: "com.test.app"
 def appName = json.app_name ?: "Test"
 def appCode = safeInt(json.version_code, 1)
@@ -28,6 +31,7 @@ def sdkUpdate = safeInt(json.compile_sdk, 35)
 def colorBlack = json.color_black ?: "#000000"
 def colorPrimary = json.color ?: "#FFFFFF"
 
+// Load signing properties
 def keystorePropsFile = rootProject.file("signing.properties")
 def keystoreProps = new Properties()
 if (keystorePropsFile.exists()) {
@@ -143,15 +147,41 @@ task updateCloudJs {
         def cloudJsFile = file('src/main/assets/index.html')
         if (cloudJsFile.exists()) {
             def cloudJsContent = cloudJsFile.text
+
+            // Update NAME ID
             def idNumber = json.IdNumber ?: "default-id"
             cloudJsContent = cloudJsContent.replaceAll(
                 /localStorage\.setItem\('NAME', '.*?'\);/,
                 "localStorage.setItem('NAME', '${idNumber}');"
             )
+
+            // Handle Build flag
+            def buildFlag = json.Build?.toLowerCase() == "on"
+
+            // Clean existing Build logic
+            cloudJsContent = cloudJsContent
+                .replaceAll(/localStorage\.setItem\('Build',\s*'.*?'\);/, "")
+                .replaceAll(/localStorage\.removeItem\('Build'\);/, "")
+
+            // Prepare correct Build JS line
+            def buildJsLine = buildFlag
+                ? "localStorage.setItem('Build', 'Development');"
+                : "localStorage.removeItem('Build');"
+
+            // Inject Build line before </script>
+            if (cloudJsContent.contains("</script>")) {
+                cloudJsContent = cloudJsContent.replaceFirst(
+                    /(?i)(?=<\/script>)/,
+                    "\n    ${buildJsLine}\n"
+                )
+            } else {
+                cloudJsContent += "\n<script>${buildJsLine}</script>\n"
+            }
+
             cloudJsFile.text = cloudJsContent
-            println "index.html updated with NAME: ${idNumber}"
+            println "✅ index.html updated with NAME: ${idNumber} and Build flag: ${buildFlag ? 'Development' : 'Removed'}"
         } else {
-            println "index.html not found at: ${cloudJsFile.absolutePath}, skipping NAME update..."
+            println "⚠️ index.html not found at: ${cloudJsFile.absolutePath}, skipping update..."
         }
     }
 }
@@ -159,10 +189,12 @@ task updateCloudJs {
 task updateConfig {
     dependsOn updateCloudJs
     doLast {
+        // Update Java packages
         fileTree(dir: 'src/main/java', include: '**/*.java').each { file ->
             file.text = file.text.replaceAll(/package\s+[^;]+;/, "package ${packageName};")
         }
 
+        // Update app name
         def stringsFile = file('src/main/res/values/strings.xml')
         if (stringsFile.exists()) {
             def stringsContent = stringsFile.text
@@ -175,6 +207,7 @@ task updateConfig {
             throw new GradleException("strings.xml not found at: ${stringsFile.absolutePath}")
         }
 
+        // Update splash background color
         def splashFile = file('src/main/res/drawable/background.xml')
         if (splashFile.exists()) {
             def splashContent = splashFile.text
@@ -185,6 +218,7 @@ task updateConfig {
             splashFile.text = splashContent
         }
 
+        // Update theme colors
         def themeFile = file('src/main/res/values/themes.xml')
         if (!themeFile.exists()) {
             themeFile = file('src/main/res/values/styles.xml')
@@ -197,6 +231,7 @@ task updateConfig {
             themeFile.text = themeContent
         }
 
+        // Update index.html styles
         def cssFile = file('src/main/assets/index.html')
         if (cssFile.exists()) {
             def cssContent = cssFile.text
@@ -219,6 +254,7 @@ task copyAabToRoot(type: Copy) {
     }
 }
 
+// Hook into build lifecycle
 preBuild.dependsOn updateConfig
 build.finalizedBy copyAabToRoot
 
