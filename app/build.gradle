@@ -1,6 +1,9 @@
 apply plugin: 'com.android.application'
 
 android {
+
+    namespace "com.elite.qel_medistore"
+    
     compileSdkVersion 35
 
     defaultConfig {
