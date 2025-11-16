@@ -18,76 +18,76 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 public class MainActivity extends AppCompatActivity {
 
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
+
     private static final int FILE_REQUEST = 101;
-    private static final int STORAGE_PERMISSION_REQUEST_CODE = 1;
+    private static final int STORAGE_PERMISSION = 102;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Initialize WebView
         webView = findViewById(R.id.WebView);
         webView.setVisibility(WebView.GONE);
 
-        // Set up WebView settings
+        setupWebView();
+        requestStoragePermissions();
+
+        webView.loadUrl("file:///android_asset/index.html");
+    }
+
+    private void setupWebView() {
+
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);  // Enable Web Storage (localStorage, IndexedDB)
+        settings.setDomStorageEnabled(true);       
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
-        settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setJavaScriptCanOpenWindowsAutomatically(true);
+        settings.setMediaPlaybackRequiresUserGesture(false);
 
-        // Enable AppCache for older devices (Optional)
-        settings.setAppCacheEnabled(true);
-        settings.setAppCachePath(getApplicationContext().getCacheDir().getAbsolutePath());
-
-        // JavaScript interface for app interaction
         webView.addJavascriptInterface(new WebAppInterface(), "AndroidApp");
 
-        // WebView Client to handle URL loading
         webView.setWebViewClient(new WebViewClient() {
+
             @Override
             public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url);
                 webView.setVisibility(WebView.VISIBLE);
             }
 
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
+
                 try {
-                    if (url.startsWith("tel:") || url.startsWith("sms:") || url.startsWith("mailto:") || url.startsWith("geo:") || url.startsWith("whatsapp:") || url.startsWith("viber:") || url.startsWith("tg:") || url.startsWith("signal:") || url.startsWith("fb:") || url.startsWith("fb-messenger:") || url.startsWith("twitter:") || url.startsWith("instagram:") || url.startsWith("youtube:") || url.startsWith("linkedin:") || url.startsWith("pinterest:") || url.startsWith("snapchat:") || url.startsWith("skype:") || url.startsWith("zoom:") || url.startsWith("slack:") || url.startsWith("spotify:") || url.startsWith("soundcloud:") || url.startsWith("intent://") || url.startsWith("content://") || url.startsWith("file://")) {
+                    if (
+                            url.startsWith("tel:") || url.startsWith("sms:") ||
+                            url.startsWith("mailto:") || url.startsWith("geo:") ||
+                            url.startsWith("whatsapp:") || url.startsWith("viber:") ||
+                            url.startsWith("tg:") || url.startsWith("signal:") ||
+                            url.startsWith("fb:") || url.startsWith("fb-messenger:") ||
+                            url.startsWith("twitter:") || url.startsWith("instagram:") ||
+                            url.startsWith("youtube:") || url.startsWith("linkedin:") ||
+                            url.startsWith("pinterest:") || url.startsWith("snapchat:") ||
+                            url.startsWith("skype:") || url.startsWith("zoom:") ||
+                            url.startsWith("slack:") || url.startsWith("spotify:") ||
+                            url.startsWith("soundcloud:") || url.startsWith("content://") ||
+                            url.startsWith("file://") || url.startsWith("intent://")
+                    ) {
                         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                         if (intent.resolveActivity(getPackageManager()) != null) {
                             startActivity(intent);
-                        } else {
-                            view.loadUrl(url);
                         }
                         return true;
-                    }
-
-                    if (url.startsWith("intent://")) {
-                        try {
-                            Intent intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME);
-                            if (intent.resolveActivity(getPackageManager()) != null) {
-                                startActivity(intent);
-                            } else {
-                                String fallbackUrl = intent.getStringExtra("browser_fallback_url");
-                                if (fallbackUrl != null) view.loadUrl(fallbackUrl);
-                            }
-                            return true;
-                        } catch (Exception e) {
-                            return false;
-                        }
                     }
 
                 } catch (Exception e) {
@@ -98,16 +98,21 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // WebChromeClient to handle file selection and geolocation permissions
         webView.setWebChromeClient(new WebChromeClient() {
+
             @Override
             public void onPermissionRequest(PermissionRequest request) {
                 runOnUiThread(() -> request.grant(request.getResources()));
             }
 
             @Override
-            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+            public boolean onShowFileChooser(
+                    WebView webView,
+                    ValueCallback<Uri[]> filePathCallback,
+                    FileChooserParams fileChooserParams
+            ) {
                 MainActivity.this.filePathCallback = filePathCallback;
+
                 Intent intent = fileChooserParams.createIntent();
                 try {
                     startActivityForResult(intent, FILE_REQUEST);
@@ -115,42 +120,54 @@ public class MainActivity extends AppCompatActivity {
                     MainActivity.this.filePathCallback = null;
                     return false;
                 }
+
                 return true;
             }
 
             @Override
-            public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
+            public void onGeolocationPermissionsShowPrompt(
+                    String origin,
+                    GeolocationPermissions.Callback callback
+            ) {
                 callback.invoke(origin, true, false);
             }
         });
 
-        // DownloadListener for handling file downloads
         webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
             DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
             request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
             request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "downloaded_file");
+
             DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
             dm.enqueue(request);
         });
+    }
 
-        // Request storage permissions for Android 6.0 (API 23) and above
-        if (Build.VERSION.SDK_INT <= 28) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_REQUEST_CODE);
-        }
+    private void requestStoragePermissions() {
 
-        // Handle special permissions for Android 11 and above (Scoped Storage)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (!Environment.isExternalStorageManager()) {
-                Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
-                startActivityForResult(intent, 200);
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED) {
+
+                ActivityCompat.requestPermissions(
+                        this,
+                        new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},
+                        STORAGE_PERMISSION
+                );
             }
         }
 
-        // Load the initial HTML file
-        webView.loadUrl("file:///android_asset/index.html");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                intent.setData(Uri.parse("package:" + getPackageName()));
+                startActivity(intent);
+            }
+        }
     }
 
     private class WebAppInterface {
+
         @JavascriptInterface
         public void closeApp() {
             runOnUiThread(() -> finish());
@@ -162,31 +179,23 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // Handle file picker results
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        if (requestCode == FILE_REQUEST && filePathCallback != null) {
-            Uri[] result = null;
-            if (resultCode == RESULT_OK && data != null) {
-                result = new Uri[]{data.getData()};
-            }
-            filePathCallback.onReceiveValue(result);
-            filePathCallback = null;
-        }
 
-        // Handle special permissions for Scoped Storage in Android 11 and above
-        if (requestCode == 200 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (Environment.isExternalStorageManager()) {
-                // Permission granted, proceed with file operations
-            } else {
-                // Permission denied, notify the user
+        if (requestCode == FILE_REQUEST && filePathCallback != null) {
+            Uri[] results = null;
+
+            if (resultCode == RESULT_OK && data != null) {
+                results = new Uri[]{data.getData()};
             }
+
+            filePathCallback.onReceiveValue(results);
+            filePathCallback = null;
         }
 
         super.onActivityResult(requestCode, resultCode, data);
     }
 
-    // Handle back button to navigate in WebView history
     @Override
     public void onBackPressed() {
         if (webView.canGoBack()) webView.goBack();
