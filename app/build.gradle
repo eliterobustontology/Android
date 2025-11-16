@@ -12,14 +12,12 @@ def config = new JsonSlurper().parse(configFile)
 
 def appPackage = config.package_name
 def appName = config.app_name
-def versionCode = config.version_code.toInteger()
+def versionCode = config.version_code.toInteger()   // <-- ensure integer
 def versionName = config.version_name
-def minSdk = config.min_sdk.toInteger()
-def compileSdk = config.compile_sdk.toInteger()
+def minSdk = config.min_sdk.toInteger()             // <-- ensure integer
+def compileSdk = config.compile_sdk.toInteger()     // <-- ensure integer
 def iconUrl = config.app_icon
 def splashUrl = config.splash_screen
-def colorBlack = config.color_black
-def colorWhite = config.color
 
 // --- Android block ---
 android {
@@ -50,21 +48,15 @@ android {
 task downloadAppAssets {
     doLast {
         def drawableDir = file("src/main/res/drawable")
-        if (!drawableDir.exists()) {
-            drawableDir.mkdirs()
-        }
+        if (!drawableDir.exists()) drawableDir.mkdirs()
 
         def iconFile = new File(drawableDir, "app_icon.png")
         println "Downloading app_icon from ${iconUrl}..."
-        new URL(iconUrl).withInputStream { i ->
-            iconFile.withOutputStream { it << i }
-        }
+        new URL(iconUrl).withInputStream { i -> iconFile.withOutputStream { it << i } }
 
         def splashFile = new File(drawableDir, "splash_screen.png")
         println "Downloading splash_screen from ${splashUrl}..."
-        new URL(splashUrl).withInputStream { i ->
-            splashFile.withOutputStream { it << i }
-        }
+        new URL(splashUrl).withInputStream { i -> splashFile.withOutputStream { it << i } }
 
         println "✅ App assets downloaded to drawable folder."
     }
@@ -72,17 +64,7 @@ task downloadAppAssets {
 
 preBuild.dependsOn(downloadAppAssets)
 
-// --- Dependencies ---
-dependencies {
-    implementation 'androidx.appcompat:appcompat:1.4.0'
-    implementation 'com.google.android.material:material:1.9.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.3'
-    testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.3'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
-}
-
-// --- Update app name dynamically in strings.xml ---
+// --- Task: update app name in strings.xml ---
 task updateAppName {
     doLast {
         def stringsFile = file("src/main/res/values/strings.xml")
@@ -98,3 +80,13 @@ task updateAppName {
 }
 
 preBuild.dependsOn(updateAppName)
+
+// --- Dependencies ---
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.4.0'
+    implementation 'com.google.android.material:material:1.9.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.3'
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.3'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
+}
