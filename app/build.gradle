@@ -2,7 +2,7 @@ apply plugin: 'com.android.application'
 
 import groovy.json.JsonSlurper
 
-def configFile = file("${projectDir}/config.json")
+def configFile = file("${rootDir}/config.json")  
 if (!configFile.exists()) {
     throw new GradleException("config.json not found at project root")
 }
