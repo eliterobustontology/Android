@@ -1,7 +1,7 @@
 {
     "package_name": "com.elite.qel_medistore",
-    "app_name": "Qeli",
-    "version_code": 3,
+    "app_name": "Qel",
+    "version_code": 4,
     "version_name": "3",
     "min_sdk": 24,
     "compile_sdk": 35,
