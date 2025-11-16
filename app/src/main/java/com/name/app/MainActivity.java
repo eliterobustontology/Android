@@ -1,17 +1,10 @@
 package com.elite.qel_medistore;
-
 import android.Manifest;
-import android.app.AlarmManager;
-import android.app.DownloadManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
-import android.content.ActivityNotFoundException;
-import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -20,7 +13,6 @@ import android.net.Uri;
 import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
@@ -29,49 +21,33 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
-
 import org.json.JSONArray;
 import org.json.JSONObject;
-
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.Calendar;
-
 public class MainActivity extends AppCompatActivity {
-
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
-
     private static final int REQUEST_CONTACTS = 2001;
     private static final int REQUEST_NOTIFICATIONS = 2002;
-    private static final int REQUEST_STORAGE = 2003;
-    private static final int FILE_REQUEST = 2004;
-
     private boolean pendingContactsRequest = false;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
         webView = findViewById(R.id.WebView);
         webView.setVisibility(WebView.GONE);
-
         createNotificationChannel();
         setupWebView();
         webView.loadUrl("file:///android_asset/index.html");
-
-        scheduleUpdateCheck(); 
     }
-
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
@@ -83,11 +59,9 @@ public class MainActivity extends AppCompatActivity {
             manager.createNotificationChannel(channel);
         }
     }
-
     private boolean hasPermission(String perm) {
         return ContextCompat.checkSelfPermission(this, perm) == PackageManager.PERMISSION_GRANTED;
     }
-
     private void setupWebView() {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -96,15 +70,12 @@ public class MainActivity extends AppCompatActivity {
         settings.setAllowContentAccess(true);
         settings.setJavaScriptCanOpenWindowsAutomatically(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
-
         webView.addJavascriptInterface(new WebAppInterface(), "AndroidApp");
-
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
                 webView.setVisibility(WebView.VISIBLE);
             }
-
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 try {
@@ -133,13 +104,11 @@ public class MainActivity extends AppCompatActivity {
                 return false;
             }
         });
-
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onPermissionRequest(PermissionRequest request) {
                 runOnUiThread(() -> request.grant(request.getResources()));
             }
-
             @Override
             public boolean onShowFileChooser(
                     WebView webView,
@@ -149,14 +118,13 @@ public class MainActivity extends AppCompatActivity {
                 MainActivity.this.filePathCallback = filePathCallback;
                 Intent intent = fileChooserParams.createIntent();
                 try {
-                    startActivityForResult(intent, FILE_REQUEST);
+                    startActivityForResult(intent, 2004); 
                 } catch (ActivityNotFoundException e) {
                     MainActivity.this.filePathCallback = null;
                     return false;
                 }
                 return true;
             }
-
             @Override
             public void onGeolocationPermissionsShowPrompt(
                     String origin,
@@ -165,19 +133,15 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
-
     private class WebAppInterface {
-
         @JavascriptInterface
         public void closeApp() {
             runOnUiThread(() -> finish());
         }
-
         @JavascriptInterface
         public void reloadApp() {
             runOnUiThread(() -> webView.reload());
         }
-
         @JavascriptInterface
         public String getDeviceData(String type) {
             try {
@@ -191,7 +155,6 @@ public class MainActivity extends AppCompatActivity {
                         );
                         return "REQUESTING_PERMISSION";
                     }
-
                     JSONArray contacts = new JSONArray();
                     ContentResolver cr = getContentResolver();
                     Cursor cur = cr.query(android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
@@ -210,14 +173,12 @@ public class MainActivity extends AppCompatActivity {
                     }
                     return contacts.toString();
                 }
-
                 if (type.equals("battery")) {
                     IntentFilter iFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
                     Intent batteryStatus = registerReceiver(null, iFilter);
                     int level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
                     return String.valueOf(level);
                 }
-
                 if (type.equals("device")) {
                     JSONObject info = new JSONObject();
                     info.put("model", Build.MODEL);
@@ -225,14 +186,11 @@ public class MainActivity extends AppCompatActivity {
                     info.put("android", Build.VERSION.RELEASE);
                     return info.toString();
                 }
-
             } catch (Exception e) {
                 return "ERROR:" + e.getMessage();
             }
-
             return "INVALID_TYPE";
         }
-
         @JavascriptInterface
         public void notify(String title, String message, String iconUrl) {
             if (Build.VERSION.SDK_INT >= 33 &&
@@ -244,7 +202,6 @@ public class MainActivity extends AppCompatActivity {
                 );
                 return;
             }
-
             NotificationCompat.Builder builder =
                     new NotificationCompat.Builder(MainActivity.this, "web_channel")
                             .setContentTitle(title)
@@ -260,7 +217,6 @@ public class MainActivity extends AppCompatActivity {
             NotificationManagerCompat manager = NotificationManagerCompat.from(MainActivity.this);
             manager.notify((int) System.currentTimeMillis(), builder.build());
         }
-
         private Bitmap getBitmapFromURL(String src) {
             try {
                 URL url = new URL(src);
@@ -275,14 +231,13 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
-
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] perms, int[] results) {
         if (requestCode == REQUEST_CONTACTS) {
             if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
                 if (pendingContactsRequest) {
                     pendingContactsRequest = false;
-                    webView.post(() ->
+                    webView.post(() -> 
                             webView.evaluateJavascript(
                                     "window.onAndroidContactsReady && onAndroidContactsReady();",
                                     null
@@ -293,102 +248,19 @@ public class MainActivity extends AppCompatActivity {
         }
         super.onRequestPermissionsResult(requestCode, perms, results);
     }
-
     @Override
-    protected void onActivityResult(int req, int res, @Nullable Intent data) {
-        if (req == FILE_REQUEST && filePathCallback != null) {
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 2004 && filePathCallback != null) {
             Uri[] results = null;
-            if (res == RESULT_OK && data != null) {
+            if (resultCode == RESULT_OK) {
+                if (data == null) {
+                    return;
+                }
                 results = new Uri[]{data.getData()};
             }
             filePathCallback.onReceiveValue(results);
             filePathCallback = null;
-        }
-        super.onActivityResult(req, res, data);
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (webView.canGoBack()) webView.goBack();
-        else super.onBackPressed();
-    }
-
-    private void checkForUpdate() {
-        webView.evaluateJavascript(
-                "(function(){ return localStorage.getItem('UpdatedAppLink'); })();",
-                value -> {
-                    if (value != null && !value.equals("null") && !value.isEmpty()) {
-                        String apkUrl = value.replaceAll("^\"|\"$", "");
-                        downloadAndInstallApk(apkUrl);
-                    }
-                }
-        );
-    }
-
-    private void downloadAndInstallApk(String apkUrl) {
-        if (!hasPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
-            ActivityCompat.requestPermissions(
-                    this,
-                    new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
-                    REQUEST_STORAGE
-            );
-            return;
-        }
-
-        DownloadManager.Request request = new DownloadManager.Request(Uri.parse(apkUrl));
-        request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-        request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "update.apk");
-
-        DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-        long downloadId = manager.enqueue(request);
-
-        BroadcastReceiver onComplete = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-                Cursor c = dm.query(new DownloadManager.Query().setFilterById(downloadId));
-                if (c.moveToFirst()) {
-                    String uriString = c.getString(c.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI));
-                    Intent install = new Intent(Intent.ACTION_VIEW);
-                    install.setDataAndType(Uri.parse(uriString), "application/vnd.android.package-archive");
-                    install.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(install);
-                }
-                c.close();
-                unregisterReceiver(this);
-            }
-        };
-        registerReceiver(onComplete, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
-    }
-
-    private void scheduleUpdateCheck() {
-        AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
-        Intent intent = new Intent(this, UpdateCheckReceiver.class);
-        PendingIntent pendingIntent = PendingIntent.getBroadcast(
-                this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
-
-        long interval = 6 * 60 * 60 * 1000L;
-        long firstTrigger = System.currentTimeMillis() + interval;
-
-        alarmManager.setInexactRepeating(
-                AlarmManager.RTC_WAKEUP,
-                firstTrigger,
-                interval,
-                pendingIntent
-        );
-    }
-
-    public static class UpdateCheckReceiver extends BroadcastReceiver {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (context instanceof MainActivity) {
-                ((MainActivity) context).checkForUpdate();
-            } else {
-                Intent i = new Intent(context, MainActivity.class);
-                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                context.startActivity(i);
-            }
         }
     }
 }
