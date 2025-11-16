@@ -1,262 +1,27 @@
-import groovy.json.JsonSlurper
-import java.net.URL
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
-
 apply plugin: 'com.android.application'
 
-// Load JSON config
-def jsonFile = file("${rootDir}/config.json")
-if (!jsonFile.exists()) {
-    throw new GradleException("config.json not found at ${jsonFile.absolutePath}")
-}
-def json = new JsonSlurper().parseText(jsonFile.text)
-
-// Utility function for safe integer parsing
-def safeInt(value, defaultVal) {
-    try {
-        return value.toInteger()
-    } catch (Exception e) {
-        return defaultVal
-    }
-}
-
-// Read values from config.json
-def packageName = json.package_name ?: "com.test.app"
-def appName = json.app_name ?: "Test"
-def appCode = safeInt(json.version_code, 1)
-def appVersion = json.version_name ?: "1"
-def sdkMin = safeInt(json.min_sdk, 24)
-def sdkUpdate = safeInt(json.compile_sdk, 35)
-def colorBlack = json.color_black ?: "#000000"
-def colorPrimary = json.color ?: "#FFFFFF"
-
-// Load signing properties
-def keystorePropsFile = rootProject.file("signing.properties")
-def keystoreProps = new Properties()
-if (keystorePropsFile.exists()) {
-    keystoreProps.load(new FileInputStream(keystorePropsFile))
-} else {
-    throw new GradleException("Missing signing.properties file.")
-}
-
 android {
-    compileSdkVersion sdkUpdate
+    compileSdkVersion 35
 
     defaultConfig {
-        applicationId packageName
-        minSdkVersion sdkMin
-        targetSdkVersion sdkUpdate
-        versionCode appCode
-        versionName appVersion
-        namespace packageName
-    }
-
-    signingConfigs {
-        release {
-            storeFile file(keystoreProps['storeFile'])
-            storePassword keystoreProps['storePassword']
-            keyAlias keystoreProps['keyAlias']
-            keyPassword keystoreProps['keyPassword']
-            storeType "pkcs12"
-        }
+        applicationId "com.test.app"
+        minSdkVersion 24
+        targetSdkVersion 35
+        versionCode 1
+        versionName "1.0"
     }
 
     buildTypes {
         release {
-            signingConfig signingConfigs.release
-            minifyEnabled true
-            shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            minifyEnabled false
+            shrinkResources false
         }
-    }
-
-    bundle {
-        language {
-            enableSplit = false
-        }
-        density {
-            enableSplit = false
-        }
-        abi {
-            enableSplit = false
-        }
-    }
-
-    lint {
-        checkReleaseBuilds false
-        abortOnError false
-    }
-}
-
-task moveAssets {
-    doLast {
-        def rootDirPath = file("${rootDir}")
-        def drawablePath = file("src/main/res/drawable")
-        def assetsPath = file("src/main/assets")
-        drawablePath.mkdirs()
-        assetsPath.mkdirs()
-
-        def downloadAndSave = { String urlStr, String filename ->
-            if (urlStr && urlStr.startsWith("http")) {
-                try {
-                    def url = new URL(urlStr)
-                    def connection = url.openConnection()
-                    connection.setRequestProperty("User-Agent", "Mozilla/5.0")
-                    connection.connect()
-                    def inputStream = connection.getInputStream()
-                    def targetFile = new File(rootDirPath, filename)
-                    Files.copy(inputStream, targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
-                    println "Downloaded: ${filename} from ${urlStr}"
-                } catch (Exception e) {
-                    println "Failed to download ${filename} from ${urlStr}: ${e.message}"
-                }
-            } else {
-                println "Invalid or empty URL for ${filename}, skipping download."
-            }
-        }
-
-        downloadAndSave(json.app_icon, "app_icon.png")
-        downloadAndSave(json.splash_screen, "splash_screen.png")
-
-        ["app_icon.png", "splash_screen.png"].each { fileName ->
-            def sourceFile = new File(rootDirPath, fileName)
-            def destinationFile = new File(drawablePath, fileName)
-            if (sourceFile.exists()) {
-                Files.move(sourceFile.toPath(), destinationFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
-                println "Moved ${fileName} to drawable folder"
-            } else {
-                println "${fileName} not found in root directory, skipping move..."
-            }
-        }
-
-        def logoSource = new File(rootDirPath, "index.html")
-        def logoDestination = new File(assetsPath, "index.html")
-        if (logoSource.exists()) {
-            Files.move(logoSource.toPath(), logoDestination.toPath(), StandardCopyOption.REPLACE_EXISTING)
-            println "Moved index.html to assets folder"
-        } else {
-            println "index.html not found in root directory, skipping move..."
+        debug {
+            minifyEnabled false
+            shrinkResources false
         }
     }
 }
-
-task updateCloudJs {
-    dependsOn moveAssets
-    doLast {
-        def cloudJsFile = file('src/main/assets/index.html')
-        if (cloudJsFile.exists()) {
-            def cloudJsContent = cloudJsFile.text
-
-            // Update NAME ID
-            def idNumber = json.IdNumber ?: "default-id"
-            cloudJsContent = cloudJsContent.replaceAll(
-                /localStorage\.setItem\('NAME', '.*?'\);/,
-                "localStorage.setItem('NAME', '${idNumber}');"
-            )
-
-            // Handle Build flag
-            def buildFlag = json.Build?.toLowerCase() == "on"
-
-            // Clean existing Build logic
-            cloudJsContent = cloudJsContent
-                .replaceAll(/localStorage\.setItem\('Build',\s*'.*?'\);/, "")
-                .replaceAll(/localStorage\.removeItem\('Build'\);/, "")
-
-            // Prepare correct Build JS line
-            def buildJsLine = buildFlag
-                ? "localStorage.setItem('Build', 'Development');"
-                : "localStorage.removeItem('Build');"
-
-            // Inject Build line before </script>
-            if (cloudJsContent.contains("</script>")) {
-                cloudJsContent = cloudJsContent.replaceFirst(
-                    /(?i)(?=<\/script>)/,
-                    "\n    ${buildJsLine}\n"
-                )
-            } else {
-                cloudJsContent += "\n<script>${buildJsLine}</script>\n"
-            }
-
-            cloudJsFile.text = cloudJsContent
-            println "✅ index.html updated with NAME: ${idNumber} and Build flag: ${buildFlag ? 'Development' : 'Removed'}"
-        } else {
-            println "⚠️ index.html not found at: ${cloudJsFile.absolutePath}, skipping update..."
-        }
-    }
-}
-
-task updateConfig {
-    dependsOn updateCloudJs
-    doLast {
-        // Update Java packages
-        fileTree(dir: 'src/main/java', include: '**/*.java').each { file ->
-            file.text = file.text.replaceAll(/package\s+[^;]+;/, "package ${packageName};")
-        }
-
-        // Update app name
-        def stringsFile = file('src/main/res/values/strings.xml')
-        if (stringsFile.exists()) {
-            def stringsContent = stringsFile.text
-            stringsContent = stringsContent.replaceAll(
-                /<string name="app_name">.*?<\/string>/,
-                "<string name=\"app_name\">${appName}</string>"
-            )
-            stringsFile.text = stringsContent
-        } else {
-            throw new GradleException("strings.xml not found at: ${stringsFile.absolutePath}")
-        }
-
-        // Update splash background color
-        def splashFile = file('src/main/res/drawable/background.xml')
-        if (splashFile.exists()) {
-            def splashContent = splashFile.text
-            splashContent = splashContent.replaceAll(
-                /<color android:color=".*?" \/>/,
-                "<color android:color=\"${colorBlack}\" />"
-            )
-            splashFile.text = splashContent
-        }
-
-        // Update theme colors
-        def themeFile = file('src/main/res/values/themes.xml')
-        if (!themeFile.exists()) {
-            themeFile = file('src/main/res/values/styles.xml')
-        }
-        if (themeFile.exists()) {
-            def themeContent = themeFile.text
-            themeContent = themeContent
-                .replaceAll(/<item name="android:statusBarColor">.*?<\/item>/, "<item name=\"android:statusBarColor\">${colorBlack}</item>")
-                .replaceAll(/<item name="android:navigationBarColor">.*?<\/item>/, "<item name=\"android:navigationBarColor\">${colorBlack}</item>")
-            themeFile.text = themeContent
-        }
-
-        // Update index.html styles
-        def cssFile = file('src/main/assets/index.html')
-        if (cssFile.exists()) {
-            def cssContent = cssFile.text
-            cssContent = cssContent.replaceAll(/color:\s*#[0-9a-fA-F]{6}/, "color: ${colorPrimary}")
-            cssContent = cssContent.replaceAll(/background:\s*#[0-9a-fA-F]{6}/, "background: ${colorBlack}")
-            cssFile.text = cssContent
-        }
-    }
-}
-
-task copyAabToRoot(type: Copy) {
-    dependsOn "bundleRelease"
-    from("$buildDir/outputs/bundle/release/")
-    include("*.aab")
-    from("$buildDir/outputs/mapping/release/")
-    include("mapping.txt")
-    into("$rootDir/output")
-    doLast {
-        println "✅ AAB and mapping.txt copied to ${rootDir}/output"
-    }
-}
-
-// Hook into build lifecycle
-preBuild.dependsOn updateConfig
-build.finalizedBy copyAabToRoot
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.4.0'
