@@ -24,15 +24,14 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
-
 import org.json.JSONArray;
 import org.json.JSONObject;
+import android.content.IntentFilter;
 
 public class MainActivity extends AppCompatActivity {
 
