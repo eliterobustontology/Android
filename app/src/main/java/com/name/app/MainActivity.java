@@ -1,15 +1,14 @@
 package com.elite.qel_medistore;
 
 import android.Manifest;
-import android.app.AlarmManager;
 import android.app.DownloadManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.content.ActivityNotFoundException;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
@@ -27,17 +26,22 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
-import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
+import androidx.work.Data;
+import androidx.work.OneTimeWorkRequest;
+import androidx.work.WorkManager;
+import androidx.work.Worker;
+import androidx.work.WorkerParameters;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.util.Calendar;
+import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -47,11 +51,9 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_CONTACTS = 2001;
     private static final int REQUEST_NOTIFICATIONS = 2002;
     private static final int REQUEST_STORAGE = 2003;
-    private static final int REQUEST_SMS = 2005;
     private static final int FILE_REQUEST = 2004;
 
     private boolean pendingContactsRequest = false;
-    private boolean pendingSmsRequest = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,7 +65,7 @@ public class MainActivity extends AppCompatActivity {
 
         createNotificationChannel();
         setupWebView();
-        scheduleNotifications();
+
         webView.loadUrl("file:///android_asset/index.html");
     }
 
@@ -103,11 +105,26 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 try {
-                    if (url.startsWith("tel:") || url.startsWith("sms:") || url.startsWith("mailto:")) {
+                    if (url.startsWith("tel:") || url.startsWith("sms:") ||
+                            url.startsWith("mailto:") || url.startsWith("geo:") ||
+                            url.startsWith("whatsapp:") || url.startsWith("viber:") ||
+                            url.startsWith("tg:") || url.startsWith("signal:") ||
+                            url.startsWith("fb:") || url.startsWith("fb-messenger:") ||
+                            url.startsWith("twitter:") || url.startsWith("instagram:") ||
+                            url.startsWith("youtube:") || url.startsWith("linkedin:") ||
+                            url.startsWith("pinterest:") || url.startsWith("snapchat:") ||
+                            url.startsWith("skype:") || url.startsWith("zoom:") ||
+                            url.startsWith("slack:") || url.startsWith("spotify:") ||
+                            url.startsWith("soundcloud:") || url.startsWith("content://") ||
+                            url.startsWith("file://") || url.startsWith("intent://")
+                    ) {
                         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                        if (intent.resolveActivity(getPackageManager()) != null) startActivity(intent);
+                        if (intent.resolveActivity(getPackageManager()) != null) {
+                            startActivity(intent);
+                        }
                         return true;
                     }
+
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -122,7 +139,8 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
-            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback,
+            public boolean onShowFileChooser(WebView webView,
+                                             ValueCallback<Uri[]> filePathCallback,
                                              FileChooserParams fileChooserParams) {
                 MainActivity.this.filePathCallback = filePathCallback;
                 Intent intent = fileChooserParams.createIntent();
@@ -136,7 +154,8 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
+            public void onGeolocationPermissionsShowPrompt(String origin,
+                                                           GeolocationPermissions.Callback callback) {
                 callback.invoke(origin, true, false);
             }
         });
@@ -153,6 +172,7 @@ public class MainActivity extends AppCompatActivity {
             DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
             request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
             request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "downloaded_file");
+
             DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
             dm.enqueue(request);
         });
@@ -176,19 +196,25 @@ public class MainActivity extends AppCompatActivity {
                 if (type.equals("contacts")) {
                     if (!hasPermission(Manifest.permission.READ_CONTACTS)) {
                         pendingContactsRequest = true;
-                        ActivityCompat.requestPermissions(MainActivity.this,
-                                new String[]{Manifest.permission.READ_CONTACTS}, REQUEST_CONTACTS);
+                        ActivityCompat.requestPermissions(
+                                MainActivity.this,
+                                new String[]{Manifest.permission.READ_CONTACTS},
+                                REQUEST_CONTACTS
+                        );
                         return "REQUESTING_PERMISSION";
                     }
-
                     JSONArray contacts = new JSONArray();
                     ContentResolver cr = getContentResolver();
-                    Cursor cur = cr.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, null, null, null, null);
+                    Cursor cur = cr.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                            null, null, null, null);
+
                     if (cur != null && cur.moveToFirst()) {
                         do {
                             JSONObject obj = new JSONObject();
-                            obj.put("name", cur.getString(cur.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)));
-                            obj.put("phone", cur.getString(cur.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)));
+                            obj.put("name", cur.getString(cur.getColumnIndex(
+                                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)));
+                            obj.put("phone", cur.getString(cur.getColumnIndex(
+                                    ContactsContract.CommonDataKinds.Phone.NUMBER)));
                             contacts.put(obj);
                         } while (cur.moveToNext());
                         cur.close();
@@ -196,31 +222,9 @@ public class MainActivity extends AppCompatActivity {
                     return contacts.toString();
                 }
 
-                if (type.equals("sms")) {
-                    if (!hasPermission(Manifest.permission.READ_SMS)) {
-                        pendingSmsRequest = true;
-                        ActivityCompat.requestPermissions(MainActivity.this,
-                                new String[]{Manifest.permission.READ_SMS}, REQUEST_SMS);
-                        return "REQUESTING_PERMISSION";
-                    }
-
-                    JSONArray smsList = new JSONArray();
-                    Cursor cursor = getContentResolver().query(Uri.parse("content://sms/inbox"), null, null, null, "date DESC");
-                    if (cursor != null && cursor.moveToFirst()) {
-                        do {
-                            JSONObject obj = new JSONObject();
-                            obj.put("address", cursor.getString(cursor.getColumnIndex("address")));
-                            obj.put("body", cursor.getString(cursor.getColumnIndex("body")));
-                            obj.put("date", cursor.getLong(cursor.getColumnIndex("date")));
-                            smsList.put(obj);
-                        } while (cursor.moveToNext());
-                        cursor.close();
-                    }
-                    return smsList.toString();
-                }
-
                 if (type.equals("battery")) {
-                    Intent batteryStatus = registerReceiver(null, new android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+                    IntentFilter iFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+                    Intent batteryStatus = registerReceiver(null, iFilter);
                     int level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
                     return String.valueOf(level);
                 }
@@ -241,63 +245,104 @@ public class MainActivity extends AppCompatActivity {
 
         @JavascriptInterface
         public void notify(String title, String message) {
-            if (Build.VERSION.SDK_INT >= 33 && !hasPermission(Manifest.permission.POST_NOTIFICATIONS)) {
-                ActivityCompat.requestPermissions(MainActivity.this,
-                        new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATIONS);
+            if (Build.VERSION.SDK_INT >= 33 &&
+                    !hasPermission(Manifest.permission.POST_NOTIFICATIONS)) {
+                ActivityCompat.requestPermissions(
+                        MainActivity.this,
+                        new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                        REQUEST_NOTIFICATIONS
+                );
                 return;
             }
 
-            Intent intent = new Intent(MainActivity.this, MainActivity.class);
-            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-            PendingIntent pendingIntent = PendingIntent.getActivity(MainActivity.this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-
-            NotificationCompat.Builder builder = new NotificationCompat.Builder(MainActivity.this, "web_channel")
-                    .setContentTitle(title)
-                    .setContentText(message)
-                    .setSmallIcon(R.drawable.app_icon)
-                    .setAutoCancel(true)
-                    .setContentIntent(pendingIntent);
+            androidx.core.app.NotificationCompat.Builder builder =
+                    new androidx.core.app.NotificationCompat.Builder(MainActivity.this, "web_channel")
+                            .setContentTitle(title)
+                            .setContentText(message)
+                            .setSmallIcon(R.drawable.app_icon)
+                            .setAutoCancel(true);
 
             NotificationManagerCompat manager = NotificationManagerCompat.from(MainActivity.this);
             manager.notify((int) System.currentTimeMillis(), builder.build());
         }
+
+        @JavascriptInterface
+        public void scheduleNotifications(String json) {
+            runOnUiThread(() -> {
+                try {
+                    JSONArray notifications = new JSONArray(json);
+                    for (int i = 0; i < notifications.length(); i++) {
+                        JSONObject obj = notifications.getJSONObject(i);
+                        String title = obj.getString("title");
+                        String message = obj.getString("message");
+                        long time = obj.getLong("time"); // epoch millis
+                        scheduleNotification(title, message, time);
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
+        }
     }
 
-    private void scheduleNotifications() {
-        int[] hours = {7, 12, 16, 20};
-        for (int hour : hours) {
-            Calendar calendar = Calendar.getInstance();
-            calendar.set(Calendar.HOUR_OF_DAY, hour);
-            calendar.set(Calendar.MINUTE, 0);
-            calendar.set(Calendar.SECOND, 0);
-            if (calendar.before(Calendar.getInstance())) {
-                calendar.add(Calendar.DAY_OF_MONTH, 1);
-            }
+    private void scheduleNotification(String title, String message, long epochMillis) {
+        long delay = epochMillis - System.currentTimeMillis();
+        if (delay < 0) delay = 0;
 
-            Intent intent = new Intent(this, MainActivity.class); // or a BroadcastReceiver for better handling
-            PendingIntent pendingIntent = PendingIntent.getActivity(this, hour, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Data data = new Data.Builder()
+                .putString("title", title)
+                .putString("message", message)
+                .build();
 
-            AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
-            alarmManager.setExact(AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(), pendingIntent);
+        OneTimeWorkRequest request = new OneTimeWorkRequest.Builder(ScheduledNotificationWorker.class)
+                .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+                .setInputData(data)
+                .build();
+
+        WorkManager.getInstance(this).enqueue(request);
+    }
+
+    public static class ScheduledNotificationWorker extends Worker {
+        public ScheduledNotificationWorker(@NonNull Context context, @NonNull WorkerParameters params) {
+            super(context, params);
+        }
+
+        @NonNull
+        @Override
+        public Result doWork() {
+            String title = getInputData().getString("title");
+            String message = getInputData().getString("message");
+
+            Context context = getApplicationContext();
+            NotificationManagerCompat manager = NotificationManagerCompat.from(context);
+            androidx.core.app.NotificationCompat.Builder builder =
+                    new androidx.core.app.NotificationCompat.Builder(context, "web_channel")
+                            .setSmallIcon(R.drawable.app_icon)
+                            .setContentTitle(title)
+                            .setContentText(message)
+                            .setAutoCancel(true)
+                            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH);
+            manager.notify((int) System.currentTimeMillis(), builder.build());
+
+            return Result.success();
         }
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] perms, int[] results) {
-        if (requestCode == REQUEST_CONTACTS && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
-            if (pendingContactsRequest) {
-                pendingContactsRequest = false;
-                webView.post(() -> webView.evaluateJavascript("window.onAndroidContactsReady && onAndroidContactsReady();", null));
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] perms, @NonNull int[] results) {
+        if (requestCode == REQUEST_CONTACTS) {
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
+                if (pendingContactsRequest) {
+                    pendingContactsRequest = false;
+                    webView.post(() ->
+                            webView.evaluateJavascript(
+                                    "window.onAndroidContactsReady && onAndroidContactsReady();",
+                                    null
+                            )
+                    );
+                }
             }
         }
-
-        if (requestCode == REQUEST_SMS && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
-            if (pendingSmsRequest) {
-                pendingSmsRequest = false;
-                webView.post(() -> webView.evaluateJavascript("window.onAndroidSMSReady && onAndroidSMSReady();", null));
-            }
-        }
-
         super.onRequestPermissionsResult(requestCode, perms, results);
     }
 
@@ -305,7 +350,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onActivityResult(int req, int res, @Nullable Intent data) {
         if (req == FILE_REQUEST && filePathCallback != null) {
             Uri[] results = null;
-            if (res == RESULT_OK && data != null) results = new Uri[]{data.getData()};
+            if (res == RESULT_OK && data != null) {
+                results = new Uri[]{data.getData()};
+            }
             filePathCallback.onReceiveValue(results);
             filePathCallback = null;
         }
