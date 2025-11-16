@@ -2,10 +2,10 @@ package com.elite.qel_medistore;
 
 import android.Manifest;
 import android.app.AlarmManager;
+import android.app.DownloadManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.app.DownloadManager;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
@@ -68,6 +68,8 @@ public class MainActivity extends AppCompatActivity {
         createNotificationChannel();
         setupWebView();
         webView.loadUrl("file:///android_asset/index.html");
+
+        scheduleUpdateCheck(); 
     }
 
     private void createNotificationChannel() {
@@ -125,7 +127,6 @@ public class MainActivity extends AppCompatActivity {
                         }
                         return true;
                     }
-
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -162,24 +163,6 @@ public class MainActivity extends AppCompatActivity {
                     GeolocationPermissions.Callback callback) {
                 callback.invoke(origin, true, false);
             }
-        });
-
-        webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
-            if (!hasPermission(Manifest.permission.READ_EXTERNAL_STORAGE)) {
-                ActivityCompat.requestPermissions(
-                        MainActivity.this,
-                        new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},
-                        REQUEST_STORAGE
-                );
-                return;
-            }
-
-            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
-            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "downloaded_file");
-
-            DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-            dm.enqueue(request);
         });
     }
 
@@ -254,7 +237,6 @@ public class MainActivity extends AppCompatActivity {
         public void notify(String title, String message, String iconUrl) {
             if (Build.VERSION.SDK_INT >= 33 &&
                     !hasPermission(Manifest.permission.POST_NOTIFICATIONS)) {
-
                 ActivityCompat.requestPermissions(
                         MainActivity.this,
                         new String[]{Manifest.permission.POST_NOTIFICATIONS},
@@ -279,25 +261,6 @@ public class MainActivity extends AppCompatActivity {
             manager.notify((int) System.currentTimeMillis(), builder.build());
         }
 
-        @JavascriptInterface
-        public void scheduleNotifications(String jsonData) {
-            try {
-                JSONArray array = new JSONArray(jsonData);
-                for (int i = 0; i < array.length(); i++) {
-                    JSONObject obj = array.getJSONObject(i);
-                    int hour = obj.getInt("hour");
-                    int minute = obj.getInt("minute");
-                    String title = obj.getString("title");
-                    String message = obj.getString("message");
-                    String icon = obj.optString("icon", "");
-
-                    scheduleNotification(hour, minute, title, message, icon, i);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-
         private Bitmap getBitmapFromURL(String src) {
             try {
                 URL url = new URL(src);
@@ -311,34 +274,6 @@ public class MainActivity extends AppCompatActivity {
                 return null;
             }
         }
-    }
-
-    private void scheduleNotification(int hour, int minute, String title, String message, String iconUrl, int id) {
-        Calendar calendar = Calendar.getInstance();
-        calendar.set(Calendar.HOUR_OF_DAY, hour);
-        calendar.set(Calendar.MINUTE, minute);
-        calendar.set(Calendar.SECOND, 0);
-
-        if (calendar.getTimeInMillis() < System.currentTimeMillis()) {
-            calendar.add(Calendar.DAY_OF_YEAR, 1);
-        }
-
-        Intent intent = new Intent(this, NotificationReceiver.class);
-        intent.putExtra("title", title);
-        intent.putExtra("message", message);
-        intent.putExtra("iconUrl", iconUrl);
-        intent.putExtra("notif_id", id);
-
-        PendingIntent pendingIntent = PendingIntent.getBroadcast(
-                this, id, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
-
-        AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
-        alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                calendar.getTimeInMillis(),
-                pendingIntent
-        );
     }
 
     @Override
@@ -378,39 +313,81 @@ public class MainActivity extends AppCompatActivity {
         else super.onBackPressed();
     }
 
-    public static class NotificationReceiver extends BroadcastReceiver {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String title = intent.getStringExtra("title");
-            String message = intent.getStringExtra("message");
-            String iconUrl = intent.getStringExtra("iconUrl");
+    private void checkForUpdate() {
+        webView.evaluateJavascript(
+                "(function(){ return localStorage.getItem('UpdatedAppLink'); })();",
+                value -> {
+                    if (value != null && !value.equals("null") && !value.isEmpty()) {
+                        String apkUrl = value.replaceAll("^\"|\"$", "");
+                        downloadAndInstallApk(apkUrl);
+                    }
+                }
+        );
+    }
 
-            NotificationCompat.Builder builder = new NotificationCompat.Builder(context, "web_channel")
-                    .setContentTitle(title)
-                    .setContentText(message)
-                    .setSmallIcon(R.drawable.app_icon)
-                    .setAutoCancel(true);
-
-            if (iconUrl != null && !iconUrl.isEmpty()) {
-                Bitmap bmp = getBitmapFromURL(iconUrl);
-                if (bmp != null) builder.setLargeIcon(bmp);
-            }
-
-            NotificationManagerCompat manager = NotificationManagerCompat.from(context);
-            manager.notify((int) System.currentTimeMillis(), builder.build());
+    private void downloadAndInstallApk(String apkUrl) {
+        if (!hasPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+            ActivityCompat.requestPermissions(
+                    this,
+                    new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                    REQUEST_STORAGE
+            );
+            return;
         }
 
-        private Bitmap getBitmapFromURL(String src) {
-            try {
-                URL url = new URL(src);
-                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                connection.setDoInput(true);
-                connection.connect();
-                InputStream input = connection.getInputStream();
-                return BitmapFactory.decodeStream(input);
-            } catch (Exception e) {
-                e.printStackTrace();
-                return null;
+        DownloadManager.Request request = new DownloadManager.Request(Uri.parse(apkUrl));
+        request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+        request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "update.apk");
+
+        DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+        long downloadId = manager.enqueue(request);
+
+        BroadcastReceiver onComplete = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+                Cursor c = dm.query(new DownloadManager.Query().setFilterById(downloadId));
+                if (c.moveToFirst()) {
+                    String uriString = c.getString(c.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI));
+                    Intent install = new Intent(Intent.ACTION_VIEW);
+                    install.setDataAndType(Uri.parse(uriString), "application/vnd.android.package-archive");
+                    install.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(install);
+                }
+                c.close();
+                unregisterReceiver(this);
+            }
+        };
+        registerReceiver(onComplete, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+    }
+
+    private void scheduleUpdateCheck() {
+        AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+        Intent intent = new Intent(this, UpdateCheckReceiver.class);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        long interval = 6 * 60 * 60 * 1000L;
+        long firstTrigger = System.currentTimeMillis() + interval;
+
+        alarmManager.setInexactRepeating(
+                AlarmManager.RTC_WAKEUP,
+                firstTrigger,
+                interval,
+                pendingIntent
+        );
+    }
+
+    public static class UpdateCheckReceiver extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (context instanceof MainActivity) {
+                ((MainActivity) context).checkForUpdate();
+            } else {
+                Intent i = new Intent(context, MainActivity.class);
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(i);
             }
         }
     }
