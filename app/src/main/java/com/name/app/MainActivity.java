@@ -1,22 +1,26 @@
 package com.elite.qel_medistore;
 
 import android.Manifest;
-import android.app.DownloadManager;
+import android.app.AlarmManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.DownloadManager;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import android.provider.ContactsContract;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
@@ -26,22 +30,20 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
-import androidx.work.Data;
-import androidx.work.OneTimeWorkRequest;
-import androidx.work.WorkManager;
-import androidx.work.Worker;
-import androidx.work.WorkerParameters;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.util.concurrent.TimeUnit;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.Calendar;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -65,8 +67,9 @@ public class MainActivity extends AppCompatActivity {
 
         createNotificationChannel();
         setupWebView();
-
         webView.loadUrl("file:///android_asset/index.html");
+
+        scheduleDailyNotifications();
     }
 
     private void createNotificationChannel() {
@@ -86,6 +89,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupWebView() {
+
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -139,10 +143,13 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
-            public boolean onShowFileChooser(WebView webView,
-                                             ValueCallback<Uri[]> filePathCallback,
-                                             FileChooserParams fileChooserParams) {
+            public boolean onShowFileChooser(
+                    WebView webView,
+                    ValueCallback<Uri[]> filePathCallback,
+                    FileChooserParams fileChooserParams
+            ) {
                 MainActivity.this.filePathCallback = filePathCallback;
+
                 Intent intent = fileChooserParams.createIntent();
                 try {
                     startActivityForResult(intent, FILE_REQUEST);
@@ -154,13 +161,15 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onGeolocationPermissionsShowPrompt(String origin,
-                                                           GeolocationPermissions.Callback callback) {
+            public void onGeolocationPermissionsShowPrompt(
+                    String origin,
+                    GeolocationPermissions.Callback callback) {
                 callback.invoke(origin, true, false);
             }
         });
 
         webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
+
             if (!hasPermission(Manifest.permission.READ_EXTERNAL_STORAGE)) {
                 ActivityCompat.requestPermissions(
                         MainActivity.this,
@@ -169,6 +178,7 @@ public class MainActivity extends AppCompatActivity {
                 );
                 return;
             }
+
             DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
             request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
             request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "downloaded_file");
@@ -193,7 +203,9 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public String getDeviceData(String type) {
             try {
+
                 if (type.equals("contacts")) {
+
                     if (!hasPermission(Manifest.permission.READ_CONTACTS)) {
                         pendingContactsRequest = true;
                         ActivityCompat.requestPermissions(
@@ -203,18 +215,19 @@ public class MainActivity extends AppCompatActivity {
                         );
                         return "REQUESTING_PERMISSION";
                     }
+
                     JSONArray contacts = new JSONArray();
                     ContentResolver cr = getContentResolver();
-                    Cursor cur = cr.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                    Cursor cur = cr.query(android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                             null, null, null, null);
 
                     if (cur != null && cur.moveToFirst()) {
                         do {
                             JSONObject obj = new JSONObject();
                             obj.put("name", cur.getString(cur.getColumnIndex(
-                                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)));
+                                    android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)));
                             obj.put("phone", cur.getString(cur.getColumnIndex(
-                                    ContactsContract.CommonDataKinds.Phone.NUMBER)));
+                                    android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER)));
                             contacts.put(obj);
                         } while (cur.moveToNext());
                         cur.close();
@@ -240,13 +253,16 @@ public class MainActivity extends AppCompatActivity {
             } catch (Exception e) {
                 return "ERROR:" + e.getMessage();
             }
+
             return "INVALID_TYPE";
         }
 
         @JavascriptInterface
-        public void notify(String title, String message) {
+        public void notify(String title, String message, String iconUrl) {
+
             if (Build.VERSION.SDK_INT >= 33 &&
                     !hasPermission(Manifest.permission.POST_NOTIFICATIONS)) {
+
                 ActivityCompat.requestPermissions(
                         MainActivity.this,
                         new String[]{Manifest.permission.POST_NOTIFICATIONS},
@@ -255,83 +271,44 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
-            androidx.core.app.NotificationCompat.Builder builder =
-                    new androidx.core.app.NotificationCompat.Builder(MainActivity.this, "web_channel")
+            NotificationCompat.Builder builder =
+                    new NotificationCompat.Builder(MainActivity.this, "web_channel")
                             .setContentTitle(title)
                             .setContentText(message)
                             .setSmallIcon(R.drawable.app_icon)
                             .setAutoCancel(true);
 
+            // Optional large icon from URL
+            if (iconUrl != null && !iconUrl.isEmpty()) {
+                Bitmap bmp = getBitmapFromURL(iconUrl);
+                if (bmp != null) builder.setLargeIcon(bmp);
+            }
+
             NotificationManagerCompat manager = NotificationManagerCompat.from(MainActivity.this);
             manager.notify((int) System.currentTimeMillis(), builder.build());
         }
 
-        @JavascriptInterface
-        public void scheduleNotifications(String json) {
-            runOnUiThread(() -> {
-                try {
-                    JSONArray notifications = new JSONArray(json);
-                    for (int i = 0; i < notifications.length(); i++) {
-                        JSONObject obj = notifications.getJSONObject(i);
-                        String title = obj.getString("title");
-                        String message = obj.getString("message");
-                        long time = obj.getLong("time"); // epoch millis
-                        scheduleNotification(title, message, time);
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            });
-        }
-    }
-
-    private void scheduleNotification(String title, String message, long epochMillis) {
-        long delay = epochMillis - System.currentTimeMillis();
-        if (delay < 0) delay = 0;
-
-        Data data = new Data.Builder()
-                .putString("title", title)
-                .putString("message", message)
-                .build();
-
-        OneTimeWorkRequest request = new OneTimeWorkRequest.Builder(ScheduledNotificationWorker.class)
-                .setInitialDelay(delay, TimeUnit.MILLISECONDS)
-                .setInputData(data)
-                .build();
-
-        WorkManager.getInstance(this).enqueue(request);
-    }
-
-    public static class ScheduledNotificationWorker extends Worker {
-        public ScheduledNotificationWorker(@NonNull Context context, @NonNull WorkerParameters params) {
-            super(context, params);
-        }
-
-        @NonNull
-        @Override
-        public Result doWork() {
-            String title = getInputData().getString("title");
-            String message = getInputData().getString("message");
-
-            Context context = getApplicationContext();
-            NotificationManagerCompat manager = NotificationManagerCompat.from(context);
-            androidx.core.app.NotificationCompat.Builder builder =
-                    new androidx.core.app.NotificationCompat.Builder(context, "web_channel")
-                            .setSmallIcon(R.drawable.app_icon)
-                            .setContentTitle(title)
-                            .setContentText(message)
-                            .setAutoCancel(true)
-                            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH);
-            manager.notify((int) System.currentTimeMillis(), builder.build());
-
-            return Result.success();
+        private Bitmap getBitmapFromURL(String src) {
+            try {
+                URL url = new URL(src);
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setDoInput(true);
+                connection.connect();
+                InputStream input = connection.getInputStream();
+                return BitmapFactory.decodeStream(input);
+            } catch (Exception e) {
+                e.printStackTrace();
+                return null;
+            }
         }
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] perms, @NonNull int[] results) {
+    public void onRequestPermissionsResult(int requestCode, String[] perms, int[] results) {
+
         if (requestCode == REQUEST_CONTACTS) {
             if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
+
                 if (pendingContactsRequest) {
                     pendingContactsRequest = false;
                     webView.post(() ->
@@ -343,19 +320,24 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }
+
         super.onRequestPermissionsResult(requestCode, perms, results);
     }
 
     @Override
     protected void onActivityResult(int req, int res, @Nullable Intent data) {
+
         if (req == FILE_REQUEST && filePathCallback != null) {
             Uri[] results = null;
+
             if (res == RESULT_OK && data != null) {
                 results = new Uri[]{data.getData()};
             }
+
             filePathCallback.onReceiveValue(results);
             filePathCallback = null;
         }
+
         super.onActivityResult(req, res, data);
     }
 
@@ -363,5 +345,83 @@ public class MainActivity extends AppCompatActivity {
     public void onBackPressed() {
         if (webView.canGoBack()) webView.goBack();
         else super.onBackPressed();
+    }
+
+    // ------------------ Notifications Scheduler ------------------
+
+    private void scheduleDailyNotifications() {
+        // Example: 2 times morning, 2 times afternoon, 3 times evening
+        int[][] times = {
+                {8, 0}, {10, 0},      // morning
+                {13, 0}, {15, 0},     // afternoon
+                {18, 0}, {20, 0}, {22, 0} // evening
+        };
+
+        for (int i = 0; i < times.length; i++) {
+            scheduleNotification(times[i][0], times[i][1], i);
+        }
+    }
+
+    private void scheduleNotification(int hour, int minute, int id) {
+        Calendar calendar = Calendar.getInstance();
+        calendar.set(Calendar.HOUR_OF_DAY, hour);
+        calendar.set(Calendar.MINUTE, minute);
+        calendar.set(Calendar.SECOND, 0);
+
+        if (calendar.getTimeInMillis() < System.currentTimeMillis()) {
+            calendar.add(Calendar.DAY_OF_YEAR, 1); // schedule for next day
+        }
+
+        Intent intent = new Intent(this, NotificationReceiver.class);
+        intent.putExtra("notif_id", id);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                this, id, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+        alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                calendar.getTimeInMillis(),
+                pendingIntent
+        );
+    }
+
+    public static class NotificationReceiver extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            // Fetch notification details from WebView / local storage
+            // For demo purposes, static text:
+            String title = "New Notification";
+            String message = "Open app to view latest content.";
+            String iconUrl = ""; // Optional: URL if you have
+
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(context, "web_channel")
+                    .setContentTitle(title)
+                    .setContentText(message)
+                    .setSmallIcon(R.drawable.app_icon)
+                    .setAutoCancel(true);
+
+            if (iconUrl != null && !iconUrl.isEmpty()) {
+                Bitmap bmp = getBitmapFromURL(iconUrl);
+                if (bmp != null) builder.setLargeIcon(bmp);
+            }
+
+            NotificationManagerCompat manager = NotificationManagerCompat.from(context);
+            manager.notify((int) System.currentTimeMillis(), builder.build());
+        }
+
+        private Bitmap getBitmapFromURL(String src) {
+            try {
+                URL url = new URL(src);
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setDoInput(true);
+                connection.connect();
+                InputStream input = connection.getInputStream();
+                return BitmapFactory.decodeStream(input);
+            } catch (Exception e) {
+                e.printStackTrace();
+                return null;
+            }
+        }
     }
 }
