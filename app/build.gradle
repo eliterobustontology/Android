@@ -2,33 +2,32 @@ apply plugin: 'com.android.application'
 
 import groovy.json.JsonSlurper
 
-def configFile = file("${rootDir}/config.json")  
+def configFile = rootProject.file("config.json")
 if (!configFile.exists()) {
     throw new GradleException("config.json not found at project root")
 }
 
 def config = new JsonSlurper().parse(configFile)
+
 def appPackage = config.package_name
 def appName = config.app_name
-def versionCode = config.version_code
-def versionName = config.version_name
-def minSdk = config.min_sdk
-def compileSdk = config.compile_sdk
+def versionCodeVal = config.version_code
+def versionNameVal = config.version_name
+def minSdkVal = config.min_sdk
+def compileSdkVal = config.compile_sdk
 def iconUrl = config.app_icon
 def splashUrl = config.splash_screen
-def colorBlack = config.color_black ?: "#333333"
-def colorPrimary = config.color ?: "#ffffff"
 
 android {
     namespace appPackage
-    compileSdkVersion compileSdk
+    compileSdkVersion compileSdkVal
 
     defaultConfig {
         applicationId appPackage
-        minSdkVersion minSdk
-        targetSdkVersion compileSdk
-        versionCode versionCode
-        versionName versionName
+        minSdkVersion minSdkVal
+        targetSdkVersion compileSdkVal
+        versionCode versionCodeVal  
+        versionName versionNameVal
     }
 
     buildTypes {
@@ -41,12 +40,15 @@ android {
             shrinkResources false
         }
     }
+
 }
 
 task downloadAppAssets {
     doLast {
         def drawableDir = file("src/main/res/drawable")
-        if (!drawableDir.exists()) drawableDir.mkdirs()
+        if (!drawableDir.exists()) {
+            drawableDir.mkdirs()
+        }
 
         def iconFile = new File(drawableDir, "app_icon.png")
         println "Downloading app_icon from ${iconUrl}..."
@@ -60,65 +62,7 @@ task downloadAppAssets {
     }
 }
 
-def javaDir = file("src/main/java")
-
-task updatePackageNames {
-    doLast {
-        if (!javaDir.exists()) {
-            println "No java folder found at ${javaDir}"
-            return
-        }
-
-        println "Updating package statements to: ${appPackage}"
-        javaDir.eachFileRecurse { file ->
-            if (file.name.endsWith(".java") || file.name.endsWith(".kt")) {
-                def text = file.text
-                def updatedText = text.replaceAll(/package\s+[a-zA-Z0-9_.]+;/, "package ${appPackage};")
-                if (text != updatedText) file.text = updatedText
-            }
-        }
-    }
-}
-
-def stringsFile = file("src/main/res/values/strings.xml")
-task updateAppName {
-    doLast {
-        if (!stringsFile.exists()) {
-            println "strings.xml not found at ${stringsFile}"
-            return
-        }
-
-        def text = stringsFile.text
-        if (text.contains('<string name="app_name">')) {
-            text = text.replaceAll(/<string name="app_name">.*<\/string>/,
-                                   "<string name=\"app_name\">${appName}</string>")
-        } else {
-            text = text.replace('</resources>', "    <string name=\"app_name\">${appName}</string>\n</resources>")
-        }
-        stringsFile.text = text
-        println "Updated app name to: ${appName}"
-    }
-}
-
-def stylesFile = file("src/main/res/values/styles.xml")
-task updateThemeColors {
-    doLast {
-        if (!stylesFile.exists()) {
-            println "styles.xml not found at ${stylesFile}"
-            return
-        }
-
-        def text = stylesFile.text
-        text = text.replaceAll(/<item name="android:statusBarColor">.*<\/item>/,
-                               "<item name=\"android:statusBarColor\">${colorBlack}</item>")
-        text = text.replaceAll(/<item name="android:navigationBarColor">.*<\/item>/,
-                               "<item name=\"android:navigationBarColor\">${colorBlack}</item>")
-        stylesFile.text = text
-        println "Updated status and navigation bar colors."
-    }
-}
-
-preBuild.dependsOn(downloadAppAssets, updatePackageNames, updateAppName, updateThemeColors)
+preBuild.dependsOn(downloadAppAssets)
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.4.0'
