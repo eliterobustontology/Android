@@ -68,8 +68,6 @@ public class MainActivity extends AppCompatActivity {
         createNotificationChannel();
         setupWebView();
         webView.loadUrl("file:///android_asset/index.html");
-
-        scheduleDailyNotifications();
     }
 
     private void createNotificationChannel() {
@@ -89,7 +87,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupWebView() {
-
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -149,7 +146,6 @@ public class MainActivity extends AppCompatActivity {
                     FileChooserParams fileChooserParams
             ) {
                 MainActivity.this.filePathCallback = filePathCallback;
-
                 Intent intent = fileChooserParams.createIntent();
                 try {
                     startActivityForResult(intent, FILE_REQUEST);
@@ -169,7 +165,6 @@ public class MainActivity extends AppCompatActivity {
         });
 
         webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
-
             if (!hasPermission(Manifest.permission.READ_EXTERNAL_STORAGE)) {
                 ActivityCompat.requestPermissions(
                         MainActivity.this,
@@ -203,9 +198,7 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public String getDeviceData(String type) {
             try {
-
                 if (type.equals("contacts")) {
-
                     if (!hasPermission(Manifest.permission.READ_CONTACTS)) {
                         pendingContactsRequest = true;
                         ActivityCompat.requestPermissions(
@@ -259,7 +252,6 @@ public class MainActivity extends AppCompatActivity {
 
         @JavascriptInterface
         public void notify(String title, String message, String iconUrl) {
-
             if (Build.VERSION.SDK_INT >= 33 &&
                     !hasPermission(Manifest.permission.POST_NOTIFICATIONS)) {
 
@@ -278,7 +270,6 @@ public class MainActivity extends AppCompatActivity {
                             .setSmallIcon(R.drawable.app_icon)
                             .setAutoCancel(true);
 
-            // Optional large icon from URL
             if (iconUrl != null && !iconUrl.isEmpty()) {
                 Bitmap bmp = getBitmapFromURL(iconUrl);
                 if (bmp != null) builder.setLargeIcon(bmp);
@@ -286,6 +277,25 @@ public class MainActivity extends AppCompatActivity {
 
             NotificationManagerCompat manager = NotificationManagerCompat.from(MainActivity.this);
             manager.notify((int) System.currentTimeMillis(), builder.build());
+        }
+
+        @JavascriptInterface
+        public void scheduleNotifications(String jsonData) {
+            try {
+                JSONArray array = new JSONArray(jsonData);
+                for (int i = 0; i < array.length(); i++) {
+                    JSONObject obj = array.getJSONObject(i);
+                    int hour = obj.getInt("hour");
+                    int minute = obj.getInt("minute");
+                    String title = obj.getString("title");
+                    String message = obj.getString("message");
+                    String icon = obj.optString("icon", "");
+
+                    scheduleNotification(hour, minute, title, message, icon, i);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
 
         private Bitmap getBitmapFromURL(String src) {
@@ -303,77 +313,22 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] perms, int[] results) {
-
-        if (requestCode == REQUEST_CONTACTS) {
-            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
-
-                if (pendingContactsRequest) {
-                    pendingContactsRequest = false;
-                    webView.post(() ->
-                            webView.evaluateJavascript(
-                                    "window.onAndroidContactsReady && onAndroidContactsReady();",
-                                    null
-                            )
-                    );
-                }
-            }
-        }
-
-        super.onRequestPermissionsResult(requestCode, perms, results);
-    }
-
-    @Override
-    protected void onActivityResult(int req, int res, @Nullable Intent data) {
-
-        if (req == FILE_REQUEST && filePathCallback != null) {
-            Uri[] results = null;
-
-            if (res == RESULT_OK && data != null) {
-                results = new Uri[]{data.getData()};
-            }
-
-            filePathCallback.onReceiveValue(results);
-            filePathCallback = null;
-        }
-
-        super.onActivityResult(req, res, data);
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (webView.canGoBack()) webView.goBack();
-        else super.onBackPressed();
-    }
-
-    // ------------------ Notifications Scheduler ------------------
-
-    private void scheduleDailyNotifications() {
-        // Example: 2 times morning, 2 times afternoon, 3 times evening
-        int[][] times = {
-                {8, 0}, {10, 0},      // morning
-                {13, 0}, {15, 0},     // afternoon
-                {18, 0}, {20, 0}, {22, 0} // evening
-        };
-
-        for (int i = 0; i < times.length; i++) {
-            scheduleNotification(times[i][0], times[i][1], i);
-        }
-    }
-
-    private void scheduleNotification(int hour, int minute, int id) {
+    private void scheduleNotification(int hour, int minute, String title, String message, String iconUrl, int id) {
         Calendar calendar = Calendar.getInstance();
         calendar.set(Calendar.HOUR_OF_DAY, hour);
         calendar.set(Calendar.MINUTE, minute);
         calendar.set(Calendar.SECOND, 0);
 
         if (calendar.getTimeInMillis() < System.currentTimeMillis()) {
-            calendar.add(Calendar.DAY_OF_YEAR, 1); // schedule for next day
+            calendar.add(Calendar.DAY_OF_YEAR, 1);
         }
 
         Intent intent = new Intent(this, NotificationReceiver.class);
+        intent.putExtra("title", title);
+        intent.putExtra("message", message);
+        intent.putExtra("iconUrl", iconUrl);
         intent.putExtra("notif_id", id);
+
         PendingIntent pendingIntent = PendingIntent.getBroadcast(
                 this, id, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
@@ -386,14 +341,49 @@ public class MainActivity extends AppCompatActivity {
         );
     }
 
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] perms, int[] results) {
+        if (requestCode == REQUEST_CONTACTS) {
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
+                if (pendingContactsRequest) {
+                    pendingContactsRequest = false;
+                    webView.post(() ->
+                            webView.evaluateJavascript(
+                                    "window.onAndroidContactsReady && onAndroidContactsReady();",
+                                    null
+                            )
+                    );
+                }
+            }
+        }
+        super.onRequestPermissionsResult(requestCode, perms, results);
+    }
+
+    @Override
+    protected void onActivityResult(int req, int res, @Nullable Intent data) {
+        if (req == FILE_REQUEST && filePathCallback != null) {
+            Uri[] results = null;
+            if (res == RESULT_OK && data != null) {
+                results = new Uri[]{data.getData()};
+            }
+            filePathCallback.onReceiveValue(results);
+            filePathCallback = null;
+        }
+        super.onActivityResult(req, res, data);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (webView.canGoBack()) webView.goBack();
+        else super.onBackPressed();
+    }
+
     public static class NotificationReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
-            // Fetch notification details from WebView / local storage
-            // For demo purposes, static text:
-            String title = "New Notification";
-            String message = "Open app to view latest content.";
-            String iconUrl = ""; // Optional: URL if you have
+            String title = intent.getStringExtra("title");
+            String message = intent.getStringExtra("message");
+            String iconUrl = intent.getStringExtra("iconUrl");
 
             NotificationCompat.Builder builder = new NotificationCompat.Builder(context, "web_channel")
                     .setContentTitle(title)
