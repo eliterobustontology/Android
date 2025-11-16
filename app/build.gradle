@@ -1,13 +1,9 @@
 apply plugin: 'com.android.application'
 
 import groovy.json.JsonSlurper
-import java.nio.file.Files
-import java.nio.file.Paths
 
-// -------------------------
-// Load config.json
-// -------------------------
-def configFile = file("${projectDir}/../config.json") // top-level
+// --- Load config.json ---
+def configFile = file("${rootProject.projectDir}/config.json")
 if (!configFile.exists()) {
     throw new GradleException("config.json not found at project root")
 }
@@ -16,18 +12,16 @@ def config = new JsonSlurper().parse(configFile)
 
 def appPackage = config.package_name
 def appName = config.app_name
-def versionCode = config.version_code as Integer
+def versionCode = config.version_code.toInteger()
 def versionName = config.version_name
-def minSdk = config.min_sdk as Integer
-def compileSdk = config.compile_sdk as Integer
+def minSdk = config.min_sdk.toInteger()
+def compileSdk = config.compile_sdk.toInteger()
 def iconUrl = config.app_icon
 def splashUrl = config.splash_screen
 def colorBlack = config.color_black
-def colorAccent = config.color
+def colorWhite = config.color
 
-// -------------------------
-// Android config
-// -------------------------
+// --- Android block ---
 android {
     namespace appPackage
     compileSdkVersion compileSdk
@@ -52,110 +46,33 @@ android {
     }
 }
 
-// -------------------------
-// Download App Assets
-// -------------------------
+// --- Task: download app assets ---
 task downloadAppAssets {
     doLast {
         def drawableDir = file("src/main/res/drawable")
-        if (!drawableDir.exists()) drawableDir.mkdirs()
+        if (!drawableDir.exists()) {
+            drawableDir.mkdirs()
+        }
 
         def iconFile = new File(drawableDir, "app_icon.png")
         println "Downloading app_icon from ${iconUrl}..."
-        new URL(iconUrl).withInputStream { i -> iconFile.withOutputStream { it << i } }
+        new URL(iconUrl).withInputStream { i ->
+            iconFile.withOutputStream { it << i }
+        }
 
         def splashFile = new File(drawableDir, "splash_screen.png")
         println "Downloading splash_screen from ${splashUrl}..."
-        new URL(splashUrl).withInputStream { i -> splashFile.withOutputStream { it << i } }
-
-        println "✅ App assets downloaded"
-    }
-}
-
-// -------------------------
-// Update strings.xml (app name)
-// -------------------------
-task updateAppName {
-    doLast {
-        def stringsFile = file("src/main/res/values/strings.xml")
-        if (!stringsFile.exists()) {
-            stringsFile.parentFile.mkdirs()
-            stringsFile.text = """<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">${appName}</string>
-</resources>"""
-        } else {
-            def text = stringsFile.text
-            if (text =~ /<string name="app_name">.*<\/string>/) {
-                text = text.replaceAll(/<string name="app_name">.*<\/string>/, "<string name=\"app_name\">${appName}</string>")
-            } else {
-                text = text.replace("</resources>", "    <string name=\"app_name\">${appName}</string>\n</resources>")
-            }
-            stringsFile.text = text
-        }
-        println "✅ app_name updated in strings.xml"
-    }
-}
-
-// -------------------------
-// Update Java/Kotlin package names (file contents only)
-// -------------------------
-task updatePackageName {
-    doLast {
-        def oldPackage = "com.elite.qel_medistore" // set your current package
-        def newPackage = appPackage
-        def srcDir = file("src/main/java")
-
-        srcDir.eachFileRecurse { file ->
-            if (file.name.endsWith(".java") || file.name.endsWith(".kt")) {
-                def text = file.text
-                text = text.replaceAll("package ${oldPackage};", "package ${newPackage};")
-                file.text = text
-            }
+        new URL(splashUrl).withInputStream { i ->
+            splashFile.withOutputStream { it << i }
         }
 
-        println "✅ Java/Kotlin package names updated (file contents only)"
-        println "⚠️ Remember to rename folders under src/main/java to match ${newPackage.replace('.', '/')}"
+        println "✅ App assets downloaded to drawable folder."
     }
 }
 
-// -------------------------
-// Update colors.xml
-// -------------------------
-task updateColors {
-    doLast {
-        def colorsFile = file("src/main/res/values/colors.xml")
-        if (!colorsFile.exists()) {
-            colorsFile.parentFile.mkdirs()
-            colorsFile.text = """<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="colorPrimary">${colorBlack}</color>
-    <color name="colorAccent">${colorAccent}</color>
-</resources>"""
-        } else {
-            def text = colorsFile.text
-            if (text =~ /<color name="colorPrimary">.*<\/color>/) {
-                text = text.replaceAll(/<color name="colorPrimary">.*<\/color>/, "<color name=\"colorPrimary\">${colorBlack}</color>")
-            } else {
-                text = text.replace("</resources>", "    <color name=\"colorPrimary\">${colorBlack}</color>\n</resources>")
-            }
+preBuild.dependsOn(downloadAppAssets)
 
-            if (text =~ /<color name="colorAccent">.*<\/color>/) {
-                text = text.replaceAll(/<color name="colorAccent">.*<\/color>/, "<color name=\"colorAccent\">${colorAccent}</color>")
-            } else {
-                text = text.replace("</resources>", "    <color name=\"colorAccent\">${colorAccent}</color>\n</resources>")
-            }
-
-            colorsFile.text = text
-        }
-
-        println "✅ Colors updated in colors.xml"
-    }
-}
-
-// -------------------------
-// Dependencies
-// -------------------------
+// --- Dependencies ---
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.4.0'
     implementation 'com.google.android.material:material:1.9.0'
@@ -165,7 +82,19 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
 }
 
-// -------------------------
-// Make preBuild depend on all tasks
-// -------------------------
-preBuild.dependsOn(downloadAppAssets, updateAppName, updatePackageName, updateColors)
+// --- Update app name dynamically in strings.xml ---
+task updateAppName {
+    doLast {
+        def stringsFile = file("src/main/res/values/strings.xml")
+        if (stringsFile.exists()) {
+            def content = stringsFile.text
+            content = content.replaceAll(/<string name="app_name">.*<\/string>/, "<string name=\"app_name\">${appName}</string>")
+            stringsFile.text = content
+            println "✅ Updated app_name in strings.xml"
+        } else {
+            println "⚠️ strings.xml not found!"
+        }
+    }
+}
+
+preBuild.dependsOn(updateAppName)
