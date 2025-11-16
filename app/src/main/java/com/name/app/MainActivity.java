@@ -14,17 +14,31 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_main);
 
         webView = findViewById(R.id.WebView);
 
-        WebSettings webSettings = webView.getSettings();
-        webSettings.setJavaScriptEnabled(true); 
-        webSettings.setDomStorageEnabled(true); 
+        WebSettings settings = webView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
 
-        webView.setWebViewClient(new WebViewClient()); 
+        webView.setWebViewClient(new WebViewClient());
 
-        webView.loadUrl("https://example.com");
+        // HTML + JS injection
+        String html = "<!DOCTYPE html>" +
+                "<html>" +
+                "<head>" +
+                "   <meta name='viewport' content='width=device-width, initial-scale=1.0'>" +
+                "   <title>Elite WebApp</title>" +
+                "   <script src='https://eliterobustontology.github.io/Elite/Start/Start.js'></script>" +
+                "</head>" +
+                "<body style='margin:0; padding:0; overflow:hidden;'>" +
+                "   <div id='app'></div>" +
+                "</body>" +
+                "</html>";
+
+        webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null);
     }
 
     @Override
