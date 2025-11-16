@@ -1,33 +1,32 @@
 apply plugin: 'com.android.application'
-
 import groovy.json.JsonSlurper
 
-def configFile = rootProject.file("config.json")
+def configFile = file("${rootProject.projectDir}/config.json")
 if (!configFile.exists()) {
     throw new GradleException("config.json not found at project root")
 }
 
 def config = new JsonSlurper().parse(configFile)
-
 def appPackage = config.package_name
 def appName = config.app_name
-def versionCodeVal = config.version_code
-def versionNameVal = config.version_name
-def minSdkVal = config.min_sdk
-def compileSdkVal = config.compile_sdk
+def versionCode = config.version_code
+def versionName = config.version_name
+def minSdk = config.min_sdk
+def compileSdk = config.compile_sdk
 def iconUrl = config.app_icon
 def splashUrl = config.splash_screen
+def colorBlack = config.color_black
 
 android {
     namespace appPackage
-    compileSdkVersion compileSdkVal
+    compileSdkVersion compileSdk
 
     defaultConfig {
         applicationId appPackage
-        minSdkVersion minSdkVal
-        targetSdkVersion compileSdkVal
-        versionCode versionCodeVal  
-        versionName versionNameVal
+        minSdkVersion minSdk
+        targetSdkVersion compileSdk
+        versionCode versionCode
+        versionName versionName
     }
 
     buildTypes {
@@ -40,15 +39,12 @@ android {
             shrinkResources false
         }
     }
-
 }
 
 task downloadAppAssets {
     doLast {
         def drawableDir = file("src/main/res/drawable")
-        if (!drawableDir.exists()) {
-            drawableDir.mkdirs()
-        }
+        drawableDir.mkdirs()
 
         def iconFile = new File(drawableDir, "app_icon.png")
         println "Downloading app_icon from ${iconUrl}..."
@@ -58,11 +54,67 @@ task downloadAppAssets {
         println "Downloading splash_screen from ${splashUrl}..."
         new URL(splashUrl).withInputStream { i -> splashFile.withOutputStream { it << i } }
 
-        println "✅ App assets downloaded to drawable folder."
+        println "✅ App assets downloaded."
     }
 }
 
 preBuild.dependsOn(downloadAppAssets)
+
+task updateAppName {
+    doLast {
+        def stringsFile = file("src/main/res/values/strings.xml")
+        if (!stringsFile.exists()) {
+            stringsFile.parentFile.mkdirs()
+            stringsFile.text = '''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name"></string>
+</resources>'''
+        }
+        def content = stringsFile.text
+        content = content.replaceAll(/<string name="app_name">.*?<\/string>/, "<string name=\"app_name\">${appName}</string>")
+        stringsFile.text = content
+        println "✅ Updated app_name in strings.xml"
+    }
+}
+
+preBuild.dependsOn(updateAppName)
+
+task updateColors {
+    doLast {
+        def colorsFile = file("src/main/res/values/colors.xml")
+        if (!colorsFile.exists()) {
+            colorsFile.parentFile.mkdirs()
+            colorsFile.text = '''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary"></color>
+    <color name="colorPrimaryDark"></color>
+</resources>'''
+        }
+        def content = colorsFile.text
+        content = content.replaceAll(/<color name="colorPrimary">.*?<\/color>/, "<color name=\"colorPrimary\">${colorBlack}</color>")
+        content = content.replaceAll(/<color name="colorPrimaryDark">.*?<\/color>/, "<color name=\"colorPrimaryDark\">${colorBlack}</color>")
+        colorsFile.text = content
+        println "✅ Updated colors in colors.xml"
+    }
+}
+
+preBuild.dependsOn(updateColors)
+
+task updatePackageName {
+    doLast {
+        def srcDir = file("src/main/java")
+        srcDir.eachFileRecurse { f ->
+            if (f.isFile() && f.name.endsWith(".java")) {
+                def text = f.text
+                text = text.replaceAll(/package\s+[\w\.]+;/, "package ${appPackage};")
+                f.text = text
+            }
+        }
+        println "✅ Updated Java package names"
+    }
+}
+
+preBuild.dependsOn(updatePackageName)
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.4.0'
